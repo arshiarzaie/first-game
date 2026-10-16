@@ -15,6 +15,10 @@ jobs:
     name: Analyze, test, and build debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      # The commit step below needs write access to push the resolved
+      # pubspec.lock back to this branch. All other steps are read-only.
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,61 +47,30 @@ jobs:
       # lock is in the repo. [skip ci] prevents workflow loops.
       - name: Commit resolved pubspec.lock
         run: |
-          git config user.name "ci-feedback-bot"
-          git config user.email "ci-feedback-bot@users.noreply.github.com"
+          git config user.name "ci-lockfile-bot"
+          git config user.email "ci-lockfile-bot@users.noreply.github.com"
           git add pubspec.lock
           git diff --cached --quiet && echo "pubspec.lock already up to date" \
             || (git commit -m "chore: commit CI-resolved pubspec.lock (run $GITHUB_RUN_ID) [skip ci]" \
                 && git push)
+        shell: bash
 
       - name: Static analysis
-        run: |
-          mkdir -p .ci-out
-          flutter analyze | tee .ci-out/analyze.txt
+        run: flutter analyze
 
       - name: Unit and widget tests
-        run: |
-          mkdir -p .ci-out
-          flutter test | tee .ci-out/test.txt
-
-      # TEMPORARY diagnostic (removed after Phase 1 CI is green): the sandbox
-      # cannot reach the log-storage host, so step output is committed back to
-      # THIS branch for inspection. [skip ci] prevents run loops.
-      - name: Publish failure output for sandbox inspection
-        if: always()
-        run: |
-          git config user.name "ci-feedback-bot"
-          git config user.email "ci-feedback-bot@users.noreply.github.com"
-          mkdir -p ci-feedback
-          cp .ci-out/*.txt ci-feedback/ 2>/dev/null || true
-          echo "run: $GITHUB_RUN_URL" > ci-feedback/RUN.txt
-          git add ci-feedback/
-          git commit -m "ci(feedback): step output for run $GITHUB_RUN_ID [skip ci]"
-          git push
+        run: flutter test
 
       - name: Build debug APK
-        run: |
-          mkdir -p .ci-out
-          flutter build apk --debug 2>&1 | tee .ci-out/build.txt
-
-      # TEMPORARY: records the real build output layout for path verification
-      # (the sandbox cannot read run logs/artifacts; removed after green run).
-      - name: List build outputs
-        if: always()
-        run: |
-          mkdir -p .ci-out
-          ls -laR build/app/outputs 2>&1 | tee .ci-out/ls.txt || true
+        run: flutter build apk --debug
 
       # Uploaded only when every preceding step passed (job stops on failure).
-      # pubspec.lock is included so the exact resolved dependency set can be
-      # committed for reproducibility (it cannot be generated in the
-      # authoring sandbox because pub.dev is unreachable there).
       - name: Upload debug APK + resolved lockfile
         uses: actions/upload-artifact@v4
         with:
           name: soul-dusk-run-debug-apk
           path: |
-            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/**/*.apk
             pubspec.lock
           if-no-files-found: error
           retention-days: 14
