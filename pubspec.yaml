@@ -1,0 +1,32 @@
+name: soul_dusk_run
+description: >-
+  SOUL: DUSK RUN — a 2.5D-inspired offline endless runner built with Flutter
+  and Flame. Phase 1: playable greybox prototype.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  # Floors match flame 1.38.2's own constraints (Dart >=3.11, Flutter >=3.41).
+  sdk: '>=3.11.0 <4.0.0'
+  flutter: '>=3.41.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Pinned per Phase 1 approval (audit-verified compatibility).
+  flame: 1.38.2
+  # Reserved for Phase 2 persistence (best score/settings). Declared now so
+  # dependency resolution is reproducible; intentionally unused in Phase 1.
+  shared_preferences: 2.5.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # NOTE: no `assets:` section yet — there are no production assets in
+  # Phase 1 (greybox placeholders are drawn with the canvas).

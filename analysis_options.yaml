@@ -1,0 +1,11 @@
+# Static analysis configuration for SOUL: DUSK RUN.
+# Docs: https://dart.dev/guides/language/analysis-options
+#
+# The analyzer surfaces errors, warnings, and lints. All lint issues must be
+# resolved in code rather than by disabling rules here.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**

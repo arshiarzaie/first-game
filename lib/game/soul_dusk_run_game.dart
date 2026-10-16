@@ -1,0 +1,247 @@
+import 'dart:math' as math;
+
+import 'package:flame/components.dart';
+import 'package:flame/game.dart';
+import 'package:flutter/painting.dart';
+
+import 'components/energy_orb.dart';
+import 'components/obstacle.dart';
+import 'components/soul_player.dart';
+import 'components/track_scene.dart';
+import 'config/game_config.dart';
+import 'systems/difficulty_manager.dart';
+import 'systems/lane_system.dart';
+import 'systems/obstacle_spawner.dart';
+import 'systems/score_manager.dart';
+
+/// Flame game root for SOUL: DUSK RUN (Phase 1 greybox).
+///
+/// Owns the run state (elapsed time, travelled distance, score), spawns fair
+/// obstacle waves from a seeded generator, projects world depth to screen
+/// space (the 2.5D illusion), and bridges to Flutter overlays for Game Over
+/// and Pause. The player runs in place; the world moves towards them.
+class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
+  SoulDuskRunGame({int seed = 0}) : _seed = seed;
+
+  /// Overlay identifiers used in the GameWidget's overlayBuilderMap.
+  static const String gameOverOverlayId = 'gameOver';
+  static const String pauseOverlayId = 'pauseMenu';
+
+  final int _seed;
+
+  // Pure-Dart gameplay systems (unit-tested in isolation).
+  final LaneSystem laneSystem = LaneSystem();
+  final DifficultyManager difficulty = const DifficultyManager();
+  final ScoreManager score = ScoreManager();
+
+  late SeededObstacleGenerator _generator;
+  late final SoulPlayer player;
+  late final TextComponent _hudText;
+
+  double _elapsedSeconds = 0;
+  double _travelled = 0;
+  double _distanceSinceWave = 0;
+  double _distanceToNextWave = GameConfig.firstWaveDistance;
+  bool _ended = false;
+  int _runNumber = 0;
+
+  double get elapsedSeconds => _elapsedSeconds;
+  double get travelled => _travelled;
+  bool get isEnded => _ended;
+  double get currentSpeed => difficulty.speedAt(_elapsedSeconds);
+
+  // ---------------------------------------------------------------
+  // 2.5D projection helpers (shared by the scene and all entities).
+  // Depth 1 = horizon, depth 0 = player plane.
+  // ---------------------------------------------------------------
+
+  double get horizonY => size.y * GameConfig.horizonRatio;
+  double get playerPlaneY => size.y * GameConfig.playerPlaneRatio;
+
+  /// Eased approach factor: 0 at the horizon, 1 at the player plane.
+  double _approach(double depth) {
+    final linear = (1.0 - depth).clamp(0.0, 1.0).toDouble();
+    return math.pow(linear, GameConfig.perspectiveExponent).toDouble();
+  }
+
+  /// Screen-space Y for a world depth.
+  double yForDepth(double depth) =>
+      horizonY + (playerPlaneY - horizonY) * _approach(depth);
+
+  /// Track half-width in px at a depth.
+  double halfWidthForDepth(double depth) {
+    final top = size.x * GameConfig.trackTopHalfWidthRatio;
+    final bottom = size.x * GameConfig.trackBottomHalfWidthRatio;
+    return top + (bottom - top) * _approach(depth);
+  }
+
+  /// Screen-space X of a lane center at a depth. [lane] may be fractional
+  /// during lane switches.
+  double laneXForDepth(double lane, double depth) {
+    final center = (GameConfig.laneCount - 1) / 2;
+    final offset = lane - center;
+    return size.x / 2 +
+        offset * halfWidthForDepth(depth) * GameConfig.laneSpreadRatio;
+  }
+
+  /// Lane-center X on the player plane (used by the player itself).
+  double laneXOnPlayerPlane(double lane) => laneXForDepth(lane, 0);
+
+  /// Visual scale for entities at a depth (gentler easing than the
+  /// vertical motion so far objects don't shrink too aggressively).
+  double scaleForDepth(double depth) {
+    final linear = (1.0 - depth).clamp(0.0, 1.0).toDouble();
+    final eased = math.pow(linear, GameConfig.scaleExponent).toDouble();
+    return GameConfig.farScale + (1 - GameConfig.farScale) * eased;
+  }
+
+  // --------------------------------------------------------------- lifecycle
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    _generator = SeededObstacleGenerator(seed: _seed);
+
+    add(TrackScene());
+    player = SoulPlayer();
+    add(player);
+
+    _hudText = TextComponent(
+      text: _hudString,
+      textRenderer: TextPaint(
+        style: const TextStyle(
+          color: Color(0xFFF6E7C8),
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      position: Vector2(16, 48),
+      priority: 1000,
+    );
+    add(_hudText);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (_ended) {
+      return;
+    }
+
+    _elapsedSeconds += dt;
+    final ds = currentSpeed * dt;
+    _travelled += ds;
+    _distanceSinceWave += ds;
+
+    if (_distanceSinceWave >= _distanceToNextWave) {
+      _spawnWave();
+    }
+
+    score.addDistance(ds);
+    _hudText.text = _hudString;
+  }
+
+  String get _hudString =>
+      'Score: ${score.totalScore}   Orbs: ${score.orbsCollected}';
+
+  // --------------------------------------------------------------- gameplay
+
+  /// Lane-move intent from the gesture layer. [direction] < 0 = left,
+  /// [direction] > 0 = right.
+  void moveLane(int direction) {
+    if (_ended || paused) {
+      return;
+    }
+    if (direction < 0) {
+      laneSystem.moveLeft();
+    } else if (direction > 0) {
+      laneSystem.moveRight();
+    }
+  }
+
+  void onPlayerHit() {
+    if (_ended) {
+      return;
+    }
+    _ended = true;
+    pauseEngine();
+    overlays.add(gameOverOverlayId);
+  }
+
+  void onOrbCollected() {
+    if (!_ended) {
+      score.addOrb();
+    }
+  }
+
+  void _spawnWave() {
+    final wave = _generator.nextWave(
+      speed: currentSpeed,
+      difficulty: difficulty.levelAt(_elapsedSeconds),
+    );
+    _distanceSinceWave = 0;
+    _distanceToNextWave = wave.distanceToNext;
+
+    for (final lane in wave.blockedLanes) {
+      add(Obstacle(lane: lane));
+    }
+    final orbLane = wave.orbLane;
+    if (orbLane != null) {
+      add(EnergyOrb(lane: orbLane));
+    }
+  }
+
+  // --------------------------------------------------------------- pause
+
+  void pauseWithMenu() {
+    if (_ended || paused) {
+      return;
+    }
+    pauseEngine();
+    overlays.add(pauseOverlayId);
+  }
+
+  void resumeFromMenu() {
+    overlays.remove(pauseOverlayId);
+    if (!_ended && paused) {
+      resumeEngine();
+    }
+  }
+
+  /// Called by the app-lifecycle observer. Safe to call repeatedly and in
+  /// any state (ignored while the Game Over overlay is already up).
+  void pauseByLifecycle() => pauseWithMenu();
+
+  // --------------------------------------------------------------- replay
+
+  /// Restarts the run (PLAY AGAIN).
+  void resetRun() {
+    _runNumber += 1;
+    _generator = SeededObstacleGenerator(seed: _seed + _runNumber);
+
+    for (final obstacle in children.whereType<Obstacle>().toList()) {
+      obstacle.removeFromParent();
+    }
+    for (final orb in children.whereType<EnergyOrb>().toList()) {
+      orb.removeFromParent();
+    }
+
+    laneSystem.reset();
+    score.reset();
+    player.reset();
+
+    _elapsedSeconds = 0;
+    _travelled = 0;
+    _distanceSinceWave = 0;
+    _distanceToNextWave = GameConfig.firstWaveDistance;
+    _ended = false;
+
+    overlays.remove(gameOverOverlayId);
+    overlays.remove(pauseOverlayId);
+    if (paused) {
+      resumeEngine();
+    }
+
+    _hudText.text = _hudString;
+  }
+}
