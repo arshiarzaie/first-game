@@ -1,7 +1,9 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import 'components/energy_orb.dart';
@@ -9,6 +11,7 @@ import 'components/obstacle.dart';
 import 'components/soul_player.dart';
 import 'components/track_scene.dart';
 import 'config/game_config.dart';
+import 'presentation/chroma_key.dart';
 import 'systems/difficulty_manager.dart';
 import 'systems/lane_system.dart';
 import 'systems/obstacle_spawner.dart';
@@ -37,6 +40,13 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   late SeededObstacleGenerator _generator;
   late final SoulPlayer player;
   late final TextComponent _hudText;
+
+  // P2 visual slice: pre-rendered production art, decoded once at load.
+  // Either may remain null (e.g. asset missing in a test environment);
+  // components fall back to their canvas placeholders so the scene never
+  // renders blank.
+  ui.Image? soulSprite;
+  ui.Image? duskHollowBackdrop;
 
   double _elapsedSeconds = 0;
   double _travelled = 0;
@@ -101,6 +111,22 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   Future<void> onLoad() async {
     await super.onLoad();
     _generator = SeededObstacleGenerator(seed: _seed);
+
+    try {
+      duskHollowBackdrop =
+          await images.load(GameConfig.duskHollowBackdropKey);
+    } catch (error) {
+      debugPrint('P2 art: Dusk Hollow backdrop unavailable ($error). '
+          'Using canvas placeholder.');
+      duskHollowBackdrop = null;
+    }
+    try {
+      soulSprite = await loadKeyedSprite(GameConfig.soulSpriteAsset);
+    } catch (error) {
+      debugPrint('P2 art: Soul sprite unavailable ($error). '
+          'Using canvas placeholder.');
+      soulSprite = null;
+    }
 
     add(TrackScene());
     player = SoulPlayer();

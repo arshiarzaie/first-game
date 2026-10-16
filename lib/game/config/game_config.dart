@@ -88,4 +88,35 @@ class GameConfig {
 
   /// Hitbox size relative to the visual size (grace margin for fairness).
   static const double hitboxFactor = 0.78;
+
+  // ---- Presentation (P2 visual prototype) ----
+  /// Bundle path of the Soul hero sprite. The PNG is rendered on a pure
+  /// magenta plate; lib/game/presentation/chroma_key.dart converts that
+  /// plate to real alpha at load time and crops to the character.
+  static const String soulSpriteAsset = 'assets/images/soul/soul_hero.png';
+
+  /// Flame `images` cache key for the Dusk Hollow backdrop (cache paths
+  /// are relative to `assets/images/`).
+  static const String duskHollowBackdropKey =
+      'worlds/dusk_hollow/backdrop.png';
+
+  /// Where the backdrop's painted horizon sits inside the image, as a
+  /// fraction of image height (tuned to the current asset).
+  static const double backdropHorizonFraction = 0.27;
+
+  /// Gentle idle float of the world backdrop, in px (world breathing).
+  static const double backdropDriftAmplitude = 5;
+
+  /// Camera sway (px of backdrop shift) per lane of player offset — a
+  /// subtle parallax cue that reinforces the elevated ¾ camera.
+  static const double cameraSwayPerLane = 7;
+
+  /// Count of ambient luminous motes drifting over the valley.
+  static const int ambientParticleCount = 16;
+
+  /// Player idle bob amplitude as a fraction of player height.
+  static const double playerBobRatio = 0.045;
+
+  /// Max roll angle (radians per lane of slide) while switching lanes.
+  static const double playerLeanAngle = 0.16;
 }

@@ -7,16 +7,27 @@ import 'package:flame/components.dart';
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
-/// Greybox Soul placeholder: a golden sun drawn with the Canvas (circle body,
-/// triangle rays, friendly face). This is NOT final character art — it only
-/// captures the recognizable identity cues (rounded sun, rays, gold) while
-/// production Soul assets are pending approval.
+/// The Soul — the game's central character. P2 visual slice: renders the
+/// production hero sprite (pre-rendered stylized 3D-cartoon sun loaded on
+/// the game; magenta plate keyed to real alpha at load time) with light
+/// idle bob and lane-switch lean. When the sprite is unavailable it falls
+/// back to the original canvas placeholder so the character is never
+/// invisible (notably in test environments without bundled assets).
+///
+/// Lane movement, hitbox and seat/size math are unchanged from Phase 1 —
+/// only the presentation layer is re-skinned.
 class SoulPlayer extends PositionComponent
     with CollisionCallbacks, HasGameReference<SoulDuskRunGame> {
   SoulPlayer() : super(priority: 20);
 
   /// Continuous lane position; fractional while switching lanes.
   double _laneX = GameConfig.initialLane.toDouble();
+
+  /// Idle-animation clock (seconds).
+  double _elapsed = 0;
+
+  /// Remaining lane slide (-1..1) — drives lean and stretch.
+  double _lean = 0;
 
   @override
   Future<void> onLoad() async {
@@ -40,6 +51,7 @@ class SoulPlayer extends PositionComponent
   @override
   void update(double dt) {
     super.update(dt);
+    _elapsed += dt;
     final target = game.laneSystem.lane.toDouble();
     if (target != _laneX) {
       // Linear slide completing one lane change in laneSwitchSeconds.
@@ -47,17 +59,65 @@ class SoulPlayer extends PositionComponent
       final delta = (target - _laneX).clamp(-maxDelta, maxDelta).toDouble();
       _laneX += delta;
     }
+    _lean = (target - _laneX).clamp(-1.0, 1.0).toDouble();
     position = Vector2(game.laneXOnPlayerPlane(_laneX), game.playerPlaneY);
   }
 
   void reset() {
     _laneX = game.laneSystem.lane.toDouble();
+    _lean = 0;
     position = Vector2(game.laneXOnPlayerPlane(_laneX), game.playerPlaneY);
   }
 
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    final sprite = game.soulSprite;
+    if (sprite == null) {
+      _renderPlaceholder(canvas);
+      return;
+    }
+    _renderSprite(canvas, sprite);
+  }
+
+  /// Production render: keyed sprite, gentle idle bob, roll + squash while
+  /// sliding lanes. All motion is decorative — hitbox stays fixed.
+  void _renderSprite(Canvas canvas, Image sprite) {
+    final w = size.x;
+    final h = size.y;
+    final bob =
+        math.sin(_elapsed * 2 * math.pi * 1.6) * h * GameConfig.playerBobRatio;
+
+    canvas.save();
+    canvas.translate(w / 2, h / 2 + bob);
+    canvas.rotate(_lean * GameConfig.playerLeanAngle);
+    // Light stretch in glide direction, slight squash vertically.
+    canvas.scale(1 + _lean.abs() * 0.08, 1 - _lean.abs() * 0.06);
+
+    final imgW = sprite.width.toDouble();
+    final imgH = sprite.height.toDouble();
+    // Contain-fit into a slightly enlarged box: the cropped sprite's own
+    // bounding box includes the ray tips, so scale up a touch to keep the
+    // body mass comparable to the Phase 1 silhouette.
+    final boxW = w * 1.30;
+    final boxH = h * 1.30;
+    final fit = math.min(boxW / imgW, boxH / imgH);
+    canvas.drawImageRect(
+      sprite,
+      Rect.fromLTWH(0, 0, imgW, imgH),
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: imgW * fit,
+        height: imgH * fit,
+      ),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+    canvas.restore();
+  }
+
+  /// Canvas placeholder (Phase 1 greybox): golden sun with rays and a
+  /// friendly face. Kept as the no-asset fallback.
+  void _renderPlaceholder(Canvas canvas) {
     final w = size.x;
     final h = size.y;
     final center = Offset(w / 2, h / 2);

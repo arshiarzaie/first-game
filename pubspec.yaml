@@ -28,5 +28,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # NOTE: no `assets:` section yet — there are no production assets in
-  # Phase 1 (greybox placeholders are drawn with the canvas).
+  # P2 visual prototype slice: Soul hero sprite (magenta-keyed — see
+  # lib/game/presentation/chroma_key.dart) and the Dusk Hollow backdrop.
+  assets:
+    - assets/images/soul/soul_hero.png
+    - assets/images/worlds/dusk_hollow/backdrop.png
