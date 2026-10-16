@@ -1,7 +1,7 @@
 name: CI
 
-# Minimal CI for the Phase 1 greybox: analyze -> test -> debug APK -> artifact.
-# Debug APK is unsigned by design; no secrets are used anywhere in this file.
+# Minimal CI for SOUL: DUSK RUN — analyze -> test -> debug APK -> artifact.
+# The debug APK is unsigned by design; no secrets are used in this file.
 
 on:
   push:
@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      # The commit step below needs write access to push the resolved
-      # pubspec.lock back to this branch. All other steps are read-only.
+      # Needed only by the pubspec.lock commit step (pushes the resolved
+      # lockfile back to this branch). Everything else is read-only.
       contents: write
     steps:
       - name: Checkout
@@ -42,9 +42,9 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
-      # Commits the CI-resolved pubspec.lock back to this branch so the exact
-      # dependency set is reproducible and version-controlled. No-op once the
-      # lock is in the repo. [skip ci] prevents workflow loops.
+      # Keeps the exact CI-resolved dependency set version-controlled for
+      # reproducibility. No-op once the lockfile is committed.
+      # [skip ci] prevents workflow loops.
       - name: Commit resolved pubspec.lock
         run: |
           git config user.name "ci-lockfile-bot"
@@ -56,36 +56,21 @@ jobs:
         shell: bash
 
       - name: Static analysis
-        run: |
-          mkdir -p .ci-out
-          flutter analyze | tee .ci-out/analyze.txt
+        run: flutter analyze
 
       - name: Unit and widget tests
-        run: |
-          mkdir -p .ci-out
-          flutter test | tee .ci-out/test.txt
+        run: flutter test
 
       - name: Build debug APK
-        run: |
-          mkdir -p .ci-out
-          flutter build apk --debug 2>&1 | tee .ci-out/build.txt
+        run: flutter build apk --debug
 
-      # TEMPORARY diagnostic (removed once CI is stable): the sandbox cannot
-      # reach the log-storage host, so failing step output is committed back
-      # to this branch. End of job + continue-on-error so it never changes a
-      # green result, and [skip ci] prevents workflow loops.
-      - name: Publish failure output for sandbox inspection
-        if: failure()
-        continue-on-error: true
+      # upload-artifact v4 skips files matched by .gitignore, and Flutter's
+      # template ignores /build — so stage the APK to an unignored name first.
+      - name: Stage debug APK for upload
         run: |
-          git config user.name "ci-feedback-bot"
-          git config user.email "ci-feedback-bot@users.noreply.github.com"
-          mkdir -p ci-feedback
-          cp .ci-out/*.txt ci-feedback/ 2>/dev/null || true
-          echo "run: $GITHUB_RUN_URL" > ci-feedback/RUN.txt
-          git add ci-feedback/
-          git commit -m "ci(feedback): step output for run $GITHUB_RUN_ID [skip ci]" || true
-          git push || true
+          APK_PATH="$(find build/app/outputs -name '*.apk' | head -n 1)"
+          test -n "$APK_PATH" && echo "found: $APK_PATH"
+          cp "$APK_PATH" soul-dusk-run-debug.apk
 
       # Uploaded only when every preceding step passed (job stops on failure).
       - name: Upload debug APK + resolved lockfile
@@ -93,7 +78,7 @@ jobs:
         with:
           name: soul-dusk-run-debug-apk
           path: |
-            build/app/outputs/**/*.apk
+            soul-dusk-run-debug.apk
             pubspec.lock
           if-no-files-found: error
           retention-days: 14
