@@ -63,6 +63,9 @@ class TrackScene extends PositionComponent
         Offset.zero,
         Offset(0, h),
         const [Color(0xFF0E0920), Color(0xFF1C1236), Color(0xFF33205A)],
+        // dart:ui requires explicit colorStops when passing 3+ colors;
+        // omitting them throws ArgumentError during paint -> black scene.
+        const [0.0, 0.55, 1.0],
       );
     canvas.drawRect(Offset.zero & Size(w, h), sky);
 
