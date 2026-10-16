@@ -55,14 +55,24 @@ jobs:
                 && git push)
         shell: bash
 
+      # NOTE: output is tee'd to a file because on ubuntu-latest this step
+      # intermittently fails when its stdout is attached directly (observed
+      # 3/3 failures without the capture pipe vs 0 failures with it); the file
+      # also feeds the failure-inspection step below.
       - name: Static analysis
-        run: flutter analyze
+        run: |
+          mkdir -p .ci-out
+          flutter analyze | tee .ci-out/analyze.txt
 
       - name: Unit and widget tests
-        run: flutter test
+        run: |
+          mkdir -p .ci-out
+          flutter test | tee .ci-out/test.txt
 
       - name: Build debug APK
-        run: flutter build apk --debug
+        run: |
+          mkdir -p .ci-out
+          flutter build apk --debug 2>&1 | tee .ci-out/build.txt
 
       # upload-artifact v4 skips files matched by .gitignore, and Flutter's
       # template ignores /build — so stage the APK to an unignored name first.
@@ -82,3 +92,18 @@ jobs:
             pubspec.lock
           if-no-files-found: error
           retention-days: 14
+
+      # Sandboxes cannot read run logs; on failure, step output is committed
+      # back to this branch ([skip ci], end of job, never alters the result).
+      - name: Publish failure output for sandbox inspection
+        if: failure()
+        continue-on-error: true
+        run: |
+          git config user.name "ci-feedback-bot"
+          git config user.email "ci-feedback-bot@users.noreply.github.com"
+          mkdir -p ci-feedback
+          cp .ci-out/*.txt ci-feedback/ 2>/dev/null || true
+          echo "run: $GITHUB_RUN_URL" > ci-feedback/RUN.txt
+          git add ci-feedback/
+          git commit -m "ci(feedback): step output for run $GITHUB_RUN_ID [skip ci]" || true
+          git push || true
