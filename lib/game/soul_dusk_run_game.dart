@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -112,21 +113,10 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
     await super.onLoad();
     _generator = SeededObstacleGenerator(seed: _seed);
 
-    try {
-      duskHollowBackdrop =
-          await images.load(GameConfig.duskHollowBackdropKey);
-    } catch (error) {
-      debugPrint('P2 art: Dusk Hollow backdrop unavailable ($error). '
-          'Using canvas placeholder.');
-      duskHollowBackdrop = null;
-    }
-    try {
-      soulSprite = await loadKeyedSprite(GameConfig.soulSpriteAsset);
-    } catch (error) {
-      debugPrint('P2 art: Soul sprite unavailable ($error). '
-          'Using canvas placeholder.');
-      soulSprite = null;
-    }
+    // Components attach immediately so the scene is interactive at once;
+    // production art decodes in the background and the components pick it
+    // up on a later frame (they re-check the game fields every render).
+    unawaited(_preloadArt());
 
     add(TrackScene());
     player = SoulPlayer();
@@ -145,6 +135,26 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
       priority: 1000,
     );
     add(_hudText);
+  }
+
+  /// Background decode of the P2 slice art. Fields stay null until
+  /// decoded; any failure leaves the Canvas placeholders active.
+  Future<void> _preloadArt() async {
+    try {
+      duskHollowBackdrop =
+          await images.load(GameConfig.duskHollowBackdropKey);
+    } catch (error) {
+      debugPrint('P2 art: Dusk Hollow backdrop unavailable ($error). '
+          'Using canvas placeholder.');
+      duskHollowBackdrop = null;
+    }
+    try {
+      soulSprite = await loadKeyedSprite(GameConfig.soulSpriteAsset);
+    } catch (error) {
+      debugPrint('P2 art: Soul sprite unavailable ($error). '
+          'Using canvas placeholder.');
+      soulSprite = null;
+    }
   }
 
   @override
