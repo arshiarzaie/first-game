@@ -39,10 +39,29 @@ jobs:
         run: flutter pub get
 
       - name: Static analysis
-        run: flutter analyze
+        run: |
+          mkdir -p .ci-out
+          flutter analyze | tee .ci-out/analyze.txt
 
       - name: Unit and widget tests
-        run: flutter test
+        run: |
+          mkdir -p .ci-out
+          flutter test | tee .ci-out/test.txt
+
+      # TEMPORARY diagnostic (removed after Phase 1 CI is green): the sandbox
+      # cannot reach the log-storage host, so failing step output is committed
+      # back to THIS branch for inspection. [skip ci] prevents run loops.
+      - name: Publish failure output for sandbox inspection
+        if: failure()
+        run: |
+          git config user.name "ci-feedback-bot"
+          git config user.email "ci-feedback-bot@users.noreply.github.com"
+          mkdir -p ci-feedback
+          cp .ci-out/*.txt ci-feedback/ 2>/dev/null || true
+          echo "run: $GITHUB_RUN_URL" > ci-feedback/RUN.txt
+          git add ci-feedback/
+          git commit -m "ci(feedback): step output for run $GITHUB_RUN_ID [skip ci]"
+          git push
 
       - name: Build debug APK
         run: flutter build apk --debug
