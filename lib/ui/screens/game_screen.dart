@@ -66,6 +66,25 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
               children: [
                 GameWidget<SoulDuskRunGame>(
                   game: _game,
+                  // Surface scene-load errors visibly instead of rendering
+                  // nothing (Flame's default propagates the error, which can
+                  // present as a black screen on real devices).
+                  errorBuilder: (context, error) => Material(
+                    color: const Color(0xFF140D26),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'The scene failed to load.\n$error',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFF6E7C8),
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                   overlayBuilderMap: {
                     SoulDuskRunGame.gameOverOverlayId: (context, game) =>
                         GameOverOverlay(
