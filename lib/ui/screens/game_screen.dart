@@ -1,3 +1,4 @@
+import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import '../../game/input/lane_gesture_controller.dart';

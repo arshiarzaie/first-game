@@ -37,9 +37,9 @@ class TrackScene extends PositionComponent
   }
 
   @override
-  void onGameResize(Vector2 gameSize) {
-    super.onGameResize(gameSize);
-    size = gameSize.clone();
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    this.size = size.clone();
   }
 
   @override

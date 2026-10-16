@@ -59,18 +59,24 @@ jobs:
       # intermittently fails when its stdout is attached directly (observed
       # 3/3 failures without the capture pipe vs 0 failures with it); the file
       # also feeds the failure-inspection step below.
+      # tee keeps a copy for the failure-inspection step. `set -o pipefail`
+      # is REQUIRED: without it the pipeline would return tee's exit code and
+      # mask analyzer/test/build failures (root cause of earlier false greens).
       - name: Static analysis
         run: |
+          set -o pipefail
           mkdir -p .ci-out
           flutter analyze | tee .ci-out/analyze.txt
 
       - name: Unit and widget tests
         run: |
+          set -o pipefail
           mkdir -p .ci-out
           flutter test | tee .ci-out/test.txt
 
       - name: Build debug APK
         run: |
+          set -o pipefail
           mkdir -p .ci-out
           flutter build apk --debug 2>&1 | tee .ci-out/build.txt
 
