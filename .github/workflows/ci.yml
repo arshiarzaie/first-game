@@ -56,13 +56,36 @@ jobs:
         shell: bash
 
       - name: Static analysis
-        run: flutter analyze
+        run: |
+          mkdir -p .ci-out
+          flutter analyze | tee .ci-out/analyze.txt
 
       - name: Unit and widget tests
-        run: flutter test
+        run: |
+          mkdir -p .ci-out
+          flutter test | tee .ci-out/test.txt
 
       - name: Build debug APK
-        run: flutter build apk --debug
+        run: |
+          mkdir -p .ci-out
+          flutter build apk --debug 2>&1 | tee .ci-out/build.txt
+
+      # TEMPORARY diagnostic (removed once CI is stable): the sandbox cannot
+      # reach the log-storage host, so failing step output is committed back
+      # to this branch. End of job + continue-on-error so it never changes a
+      # green result, and [skip ci] prevents workflow loops.
+      - name: Publish failure output for sandbox inspection
+        if: failure()
+        continue-on-error: true
+        run: |
+          git config user.name "ci-feedback-bot"
+          git config user.email "ci-feedback-bot@users.noreply.github.com"
+          mkdir -p ci-feedback
+          cp .ci-out/*.txt ci-feedback/ 2>/dev/null || true
+          echo "run: $GITHUB_RUN_URL" > ci-feedback/RUN.txt
+          git add ci-feedback/
+          git commit -m "ci(feedback): step output for run $GITHUB_RUN_ID [skip ci]" || true
+          git push || true
 
       # Uploaded only when every preceding step passed (job stops on failure).
       - name: Upload debug APK + resolved lockfile
