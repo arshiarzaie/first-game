@@ -64,7 +64,9 @@ jobs:
           git push
 
       - name: Build debug APK
-        run: flutter build apk --debug
+        run: |
+          mkdir -p .ci-out
+          flutter build apk --debug 2>&1 | tee .ci-out/build.txt
 
       # Uploaded only when every preceding step passed (job stops on failure).
       # pubspec.lock is included so the exact resolved dependency set can be
