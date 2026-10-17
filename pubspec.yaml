@@ -30,6 +30,16 @@ flutter:
 
   # P2 visual prototype slice: Soul hero sprite (magenta-keyed — see
   # lib/game/presentation/chroma_key.dart) and the Dusk Hollow backdrop.
+  # P3B adds the approved 8-frame run cycle (pre-keyed at production time,
+  # RGBA — loaded directly, no load-time keying needed).
   assets:
     - assets/images/soul/soul_hero.png
+    - assets/images/soul/run/frame_01.png
+    - assets/images/soul/run/frame_02.png
+    - assets/images/soul/run/frame_03.png
+    - assets/images/soul/run/frame_04.png
+    - assets/images/soul/run/frame_05.png
+    - assets/images/soul/run/frame_06.png
+    - assets/images/soul/run/frame_07.png
+    - assets/images/soul/run/frame_08.png
     - assets/images/worlds/dusk_hollow/backdrop.png

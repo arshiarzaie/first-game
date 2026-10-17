@@ -119,4 +119,21 @@ class GameConfig {
 
   /// Max roll angle (radians per lane of slide) while switching lanes.
   static const double playerLeanAngle = 0.16;
+
+  // ---- Soul run-cycle animation (P3B) ----
+  /// Flame `images` cache key prefix for the pre-keyed run frames; files
+  /// are `frame_01.png` … `frame_08.png` under `assets/images/soul/run/`.
+  static const String runFramesPrefix = 'soul/run/frame_';
+
+  /// Number of frames in the approved run cycle.
+  static const int runFrameCount = 8;
+
+  /// Playback rate of the run cycle.
+  static const double runCycleFps = 12;
+
+  /// Extra fit factor for run frames. The frames carry a generous
+  /// transparent margin (character ≈ 53% of the 512×512 plate) while the
+  /// hero plate is cropped tight; this boost normalizes the drawn
+  /// silhouette to the established hero size.
+  static const double runCycleFitBoost = 1.85;
 }

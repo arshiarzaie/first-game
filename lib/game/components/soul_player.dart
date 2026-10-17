@@ -72,12 +72,52 @@ class SoulPlayer extends PositionComponent
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    final frames = game.runFrames;
+    if (frames.isNotEmpty) {
+      final index =
+          (_elapsed * GameConfig.runCycleFps).floor() % frames.length;
+      _renderFrame(canvas, frames[index]);
+      return;
+    }
     final sprite = game.soulSprite;
     if (sprite == null) {
       _renderPlaceholder(canvas);
       return;
     }
     _renderSprite(canvas, sprite);
+  }
+
+  /// P3B production render: the approved 8-frame run cycle (pre-keyed
+  /// RGBA, 12 fps). Lane-switch lean/squash are kept; the sine idle-bob
+  /// is intentionally absent — the frames carry their own bounce and
+  /// stride, so the character's position stays stable across the loop.
+  void _renderFrame(Canvas canvas, Image frame) {
+    final w = size.x;
+    final h = size.y;
+    canvas.save();
+    canvas.translate(w / 2, h / 2);
+    canvas.rotate(_lean * GameConfig.playerLeanAngle);
+    canvas.scale(1 + _lean.abs() * 0.08, 1 - _lean.abs() * 0.06);
+
+    final imgW = frame.width.toDouble();
+    final imgH = frame.height.toDouble();
+    // Frames hold ~53% content inside a 512×512 plate; the fit boost
+    // normalizes the drawn silhouette to the established hero size.
+    final fit = math.min(
+      (w * 1.30 * GameConfig.runCycleFitBoost) / imgW,
+      (h * 1.30 * GameConfig.runCycleFitBoost) / imgH,
+    );
+    canvas.drawImageRect(
+      frame,
+      Rect.fromLTWH(0, 0, imgW, imgH),
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: imgW * fit,
+        height: imgH * fit,
+      ),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+    canvas.restore();
   }
 
   /// Production render: keyed sprite, gentle idle bob, roll + squash while

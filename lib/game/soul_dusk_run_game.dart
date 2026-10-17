@@ -49,6 +49,11 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   ui.Image? soulSprite;
   ui.Image? duskHollowBackdrop;
 
+  // P3B: approved 8-frame run cycle (pre-keyed RGBA plates). Empty when
+  // frames could not be decoded — the player then falls back to the
+  // single hero sprite, then to the canvas placeholder.
+  List<ui.Image> runFrames = const [];
+
   double _elapsedSeconds = 0;
   double _travelled = 0;
   double _distanceSinceWave = 0;
@@ -154,6 +159,18 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
       debugPrint('P2 art: Soul sprite unavailable ($error). '
           'Using canvas placeholder.');
       soulSprite = null;
+    }
+    try {
+      final loaded = <ui.Image>[];
+      for (var i = 1; i <= GameConfig.runFrameCount; i++) {
+        final index = i.toString().padLeft(2, '0');
+        loaded.add(await images.load('${GameConfig.runFramesPrefix}$index.png'));
+      }
+      runFrames = loaded;
+    } catch (error) {
+      debugPrint('P3B art: run-cycle frames unavailable ($error). '
+          'Using static hero sprite / placeholder.');
+      runFrames = const [];
     }
   }
 
