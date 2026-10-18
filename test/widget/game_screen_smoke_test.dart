@@ -31,6 +31,27 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
     }
 
+    // Step 2b: P4 start contract — the scene is alive but the run has NOT
+    // begun yet: Soul stands idle until the first tap.
+    {
+      final gameWidgetPre =
+          tester.widget<GameWidget<SoulDuskRunGame>>(
+        find.byType(GameWidget<SoulDuskRunGame>),
+      );
+      final gamePre = gameWidgetPre.game!;
+      expect(gamePre.isRunStarted, isFalse,
+          reason: 'run must await the first tap');
+      expect(gamePre.travelled, equals(0),
+          reason: 'world/score must not progress before the first tap');
+    }
+
+    // Step 2c: first tap starts the run exactly once (and is swallowed —
+    // it must not move lanes).
+    await tester.tapAt(const Offset(180, 400));
+    for (var i = 0; i < 90; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
     // Step 3: nothing in the startup/render path may throw.
     final exception = tester.takeException();
     expect(exception, isNull,

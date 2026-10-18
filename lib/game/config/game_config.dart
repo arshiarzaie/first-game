@@ -131,9 +131,13 @@ class GameConfig {
   /// Playback rate of the run cycle.
   static const double runCycleFps = 12;
 
-  /// Extra fit factor for run frames. The frames carry a generous
-  /// transparent margin (character ≈ 53% of the 512×512 plate) while the
-  /// hero plate is cropped tight; this boost normalizes the drawn
-  /// silhouette to the established hero size.
-  static const double runCycleFitBoost = 1.85;
+  /// Frame index shown while Soul stands idle awaiting the first tap
+  /// (frame 2 = weight-down pose: upright, both feet planted).
+  static const int runIdleFrame = 1;
+
+  /// Extra fit factor for run frames. The P3C frames hold the chibi
+  /// humanoid silhouette at ≈ 76–82% of the 512×512 plate height (vs ≈
+  /// 53% for the retired ball-design frames → boost scale ≈53/80); this
+  /// boost normalizes the drawn silhouette to the established hero size.
+  static const double runCycleFitBoost = 1.22;
 }

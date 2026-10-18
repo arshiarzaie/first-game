@@ -53,9 +53,19 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onHorizontalDragEnd: (details) {
+              // First input of a session starts the run and is swallowed —
+              // it must not double as a lane move (start contract).
+              if (!_game.isRunStarted) {
+                _game.startRun();
+                return;
+              }
               _gestures.onHorizontalDragEnd(details.primaryVelocity ?? 0.0);
             },
             onTapUp: (details) {
+              if (!_game.isRunStarted) {
+                _game.startRun();
+                return;
+              }
               _gestures.onTapUp(
                 details.localPosition.dx,
                 constraints.maxWidth,

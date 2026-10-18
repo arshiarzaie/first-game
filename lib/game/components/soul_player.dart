@@ -74,8 +74,12 @@ class SoulPlayer extends PositionComponent
     super.render(canvas);
     final frames = game.runFrames;
     if (frames.isNotEmpty) {
-      final index =
-          (_elapsed * GameConfig.runCycleFps).floor() % frames.length;
+      // P4 start behavior: before the first tap Soul stands still on one
+      // static pose frame (weight-down = upright, both feet planted);
+      // the running cycle only plays after the run starts.
+      final index = game.isRunStarted
+          ? (_elapsed * GameConfig.runCycleFps).floor() % frames.length
+          : GameConfig.runIdleFrame;
       _renderFrame(canvas, frames[index]);
       return;
     }

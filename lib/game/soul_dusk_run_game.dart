@@ -61,10 +61,17 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   bool _ended = false;
   int _runNumber = 0;
 
+  /// P4 start gate: the scene is alive with Soul standing still until the
+  /// player's first tap. Time, score, spawning and difficulty must NOT
+  /// advance while awaiting the first input (mandatory start behavior).
+  bool _runStarted = false;
+
   double get elapsedSeconds => _elapsedSeconds;
   double get travelled => _travelled;
   bool get isEnded => _ended;
-  double get currentSpeed => difficulty.speedAt(_elapsedSeconds);
+  bool get isRunStarted => _runStarted;
+  double get currentSpeed =>
+      _runStarted ? difficulty.speedAt(_elapsedSeconds) : 0;
 
   // ---------------------------------------------------------------
   // 2.5D projection helpers (shared by the scene and all entities).
@@ -177,7 +184,7 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   @override
   void update(double dt) {
     super.update(dt);
-    if (_ended) {
+    if (_ended || !_runStarted) {
       return;
     }
 
@@ -194,15 +201,29 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
     _hudText.text = _hudString;
   }
 
-  String get _hudString =>
-      'Score: ${score.totalScore}   Orbs: ${score.orbsCollected}';
+  String get _hudString => _runStarted
+      ? 'Score: ${score.totalScore}   Orbs: ${score.orbsCollected}'
+      : 'TAP TO RUN';
 
   // --------------------------------------------------------------- gameplay
 
+  /// First-input start. Transitions Soul from standing idle to running and
+  /// activates gameplay exactly once. Subsequent calls are no-ops, so the
+  /// starting tap can never double-start or restart the run. The starting
+  /// input is intentionally NOT a lane move (handled at the gesture layer).
+  void startRun() {
+    if (_runStarted || _ended || paused) {
+      return;
+    }
+    _runStarted = true;
+    _hudText.text = _hudString;
+  }
+
   /// Lane-move intent from the gesture layer. [direction] < 0 = left,
-  /// [direction] > 0 = right.
+  /// [direction] > 0 = right. Ignored before the run starts (the first
+  /// input starts the run; it must not move lanes).
   void moveLane(int direction) {
-    if (_ended || paused) {
+    if (_ended || paused || !_runStarted) {
       return;
     }
     if (direction < 0) {
@@ -288,6 +309,9 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
     _distanceSinceWave = 0;
     _distanceToNextWave = GameConfig.firstWaveDistance;
     _ended = false;
+    // Replay returns to the standing-idle state: the next run also begins
+    // with a deliberate tap (same start contract as a fresh session).
+    _runStarted = false;
 
     overlays.remove(gameOverOverlayId);
     overlays.remove(pauseOverlayId);
