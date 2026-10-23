@@ -6,13 +6,14 @@ import 'package:flame/components.dart';
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
-/// Dusk Hollow environment (World 1, P2 visual slice): the pre-rendered
-/// violet-twilight valley backdrop is drawn cover-fit with its painted
-/// horizon anchored to the game's horizon line, breathing gently and
-/// swaying opposite the player's lane for camera parallax. The code-drawn
-/// perspective track, lane dividers, flowing depth stripes and restrained
-/// cyan edges stay — gameplay projection is untouched. Ambient luminous
-/// motes drift over the valley to match the baked-in particles.
+/// World environment (P2 slice, S4 multi-world): the selected world's
+/// pre-rendered backdrop is drawn cover-fit with its painted horizon
+/// anchored to the game's horizon line, breathing gently and swaying
+/// opposite the player's lane for camera parallax. The code-drawn
+/// perspective track, lane dividers, flowing depth stripes and tinted
+/// edges take their colors from the world palette — gameplay projection
+/// is untouched and identical in every world. Ambient luminous motes
+/// drift over the valley to match the baked-in particles.
 ///
 /// When the backdrop image is unavailable the component renders the
 /// Phase 1 canvas placeholder sky/ridges instead (never a black scene).
@@ -72,19 +73,20 @@ class TrackScene extends PositionComponent
       return;
     }
 
-    final backdrop = game.duskHollowBackdrop;
+    final backdrop = game.worldBackdrop;
     if (backdrop != null) {
-      _renderDuskHollow(canvas, w, h, backdrop);
+      _renderWorldBackdrop(canvas, w, h, backdrop);
     } else {
       _renderPlaceholderBackdrop(canvas, w, h);
     }
     _renderTrack(canvas, w, h);
   }
 
-  /// Cover-fits the matte painting so the whole screen stays painted,
-  /// anchors its painted horizon near the game horizon, adds breathing
-  /// drift and lane-opposed camera sway.
-  void _renderDuskHollow(Canvas canvas, double w, double h, Image backdrop) {
+  /// Cover-fits the selected world's matte painting so the whole screen
+  /// stays painted, anchors its painted horizon near the game horizon,
+  /// adds breathing drift and lane-opposed camera sway.
+  void _renderWorldBackdrop(
+      Canvas canvas, double w, double h, Image backdrop) {
     final horizonY = game.horizonY;
     final imgW = backdrop.width.toDouble();
     final imgH = backdrop.height.toDouble();
@@ -100,7 +102,9 @@ class TrackScene extends PositionComponent
     final drift = math.sin(game.elapsedSeconds * 0.35) *
         GameConfig.backdropDriftAmplitude;
     // Clamp keeps the (covering) image from ever leaving a visible gap.
-    var dy = horizonY - imgH * GameConfig.backdropHorizonFraction * scale + drift;
+    final horizonFraction =
+        GameConfig.backdropHorizonFractionFor(game.world);
+    var dy = horizonY - imgH * horizonFraction * scale + drift;
     dy = dy.clamp(h - imgH * scale, 0.0);
 
     canvas.drawImageRect(
@@ -152,10 +156,11 @@ class TrackScene extends PositionComponent
       ..lineTo(cx + halfBottom, h)
       ..lineTo(cx - halfBottom, h)
       ..close();
-    canvas.drawPath(track, Paint()..color = const Color(0xB3241738));
+    canvas.drawPath(
+        track, Paint()..color = Color(GameConfig.trackFillArgbFor(game.world)));
 
     final edge = Paint()
-      ..color = const Color(0x884DD8FF)
+      ..color = Color(GameConfig.trackEdgeArgbFor(game.world))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawLine(
@@ -164,7 +169,7 @@ class TrackScene extends PositionComponent
         Offset(cx + halfTop, horizonY), Offset(cx + halfBottom, h), edge);
 
     final lanePaint = Paint()
-      ..color = const Color(0x444DD8FF)
+      ..color = Color(GameConfig.trackLaneArgbFor(game.world))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     for (var i = 1; i < GameConfig.laneCount; i++) {
@@ -177,7 +182,7 @@ class TrackScene extends PositionComponent
     }
 
     final stripe = Paint()
-      ..color = const Color(0x44806FB8)
+      ..color = Color(GameConfig.trackStripeArgbFor(game.world))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
     const stripeCount = 9;

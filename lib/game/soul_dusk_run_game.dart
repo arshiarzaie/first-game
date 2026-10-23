@@ -25,7 +25,12 @@ import 'systems/score_manager.dart';
 /// space (the 2.5D illusion), and bridges to Flutter overlays for Game Over
 /// and Pause. The player runs in place; the world moves towards them.
 class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
-  SoulDuskRunGame({int seed = 0}) : _seed = seed;
+  SoulDuskRunGame({int seed = 0, this.world = GameWorld.duskHollow})
+      : _seed = seed;
+
+  /// The selected world (S4): selects backdrop asset, painted-horizon
+  /// anchor and track palette. Gameplay numbers are world-agnostic.
+  final GameWorld world;
 
   /// Overlay identifiers used in the GameWidget's overlayBuilderMap.
   static const String gameOverOverlayId = 'gameOver';
@@ -47,7 +52,9 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   // components fall back to their canvas placeholders so the scene never
   // renders blank.
   ui.Image? soulSprite;
-  ui.Image? duskHollowBackdrop;
+  /// Decoded backdrop of the selected world (null until preloaded /
+  /// when the asset is unavailable — TrackScene falls back to canvas).
+  ui.Image? worldBackdrop;
 
   // P3B: approved 8-frame run cycle (pre-keyed RGBA plates). Empty when
   // frames could not be decoded — the player then falls back to the
@@ -161,12 +168,11 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   /// decoded; any failure leaves the Canvas placeholders active.
   Future<void> _preloadArt() async {
     try {
-      duskHollowBackdrop =
-          await images.load(GameConfig.duskHollowBackdropKey);
+      worldBackdrop = await images.load(GameConfig.backdropKeyFor(world));
     } catch (error) {
-      debugPrint('P2 art: Dusk Hollow backdrop unavailable ($error). '
+      debugPrint('P2 art: world backdrop unavailable ($error). '
           'Using canvas placeholder.');
-      duskHollowBackdrop = null;
+      worldBackdrop = null;
     }
     try {
       soulSprite = await loadKeyedSprite(GameConfig.soulSpriteAsset);

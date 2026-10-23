@@ -100,10 +100,79 @@ class GameConfig {
   static const String duskHollowBackdropKey =
       'worlds/dusk_hollow/backdrop.png';
 
+  /// Flame `images` cache key for the Moonveil Marsh backdrop (S4).
+  static const String moonveilMarshBackdropKey =
+      'worlds/moonveil_marsh/backdrop.png';
+
   /// Where the backdrop's painted horizon sits inside the image, as a
   /// fraction of image height (tuned to the current asset; S2 backdrop
   /// v2 carries its golden glow/citadel horizon at ~245/768).
   static const double backdropHorizonFraction = 0.319;
+
+  // ---- World selection (S4) ----
+  /// Asset/palette resolver per world. Presentation values only — the
+  /// gameplay projection and difficulty numbers are identical in every
+  /// world.
+  static String backdropKeyFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return duskHollowBackdropKey;
+      case GameWorld.moonveilMarsh:
+        return moonveilMarshBackdropKey;
+    }
+  }
+
+  /// Painted-horizon fraction of each world's backdrop (Moonveil's S4
+  /// backdrop is squeezed to carry its citadel/moon horizon at the same
+  /// ~245/768 mark as Dusk Hollow v2).
+  static double backdropHorizonFractionFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+      case GameWorld.moonveilMarsh:
+        return backdropHorizonFraction;
+    }
+  }
+
+  /// Semi-transparent track fill per world (values carry the Dusk Hollow
+  /// teal tint vs the Moonveil deep-night teal tint).
+  static int trackFillArgbFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 0xB3241738;
+      case GameWorld.moonveilMarsh:
+        return 0xB30E2B32;
+    }
+  }
+
+  /// Track edge glow per world.
+  static int trackEdgeArgbFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 0x884DD8FF;
+      case GameWorld.moonveilMarsh:
+        return 0x886FDCD2;
+    }
+  }
+
+  /// Lane divider glow per world.
+  static int trackLaneArgbFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 0x444DD8FF;
+      case GameWorld.moonveilMarsh:
+        return 0x446FDCD2;
+    }
+  }
+
+  /// Flowing depth-stripe color per world.
+  static int trackStripeArgbFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 0x44806FB8;
+      case GameWorld.moonveilMarsh:
+        return 0x448FBFC0;
+    }
+  }
 
   /// Gentle idle float of the world backdrop, in px (world breathing).
   static const double backdropDriftAmplitude = 5;
@@ -142,3 +211,8 @@ class GameConfig {
   /// boost normalizes the drawn silhouette to the established hero size.
   static const double runCycleFitBoost = 1.22;
 }
+
+/// Playable worlds (S4). Emberfall Canyon stays concept-only until its
+/// stage ships. World choice changes assets/palette only — never the
+/// gameplay projection, difficulty or identity.
+enum GameWorld { duskHollow, moonveilMarsh }

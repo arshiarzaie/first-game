@@ -1,6 +1,7 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
+import '../../game/config/game_config.dart';
 import '../../game/input/lane_gesture_controller.dart';
 import '../../game/soul_dusk_run_game.dart';
 import '../overlays/game_over_overlay.dart';
@@ -12,7 +13,10 @@ import '../overlays/pause_overlay.dart';
 ///    button; resume always goes through the pause menu so the player is
 ///    never dropped back into motion unexpectedly.
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+  const GameScreen({super.key, this.world = GameWorld.duskHollow});
+
+  /// World opened from the World Select screen (S4): visuals only.
+  final GameWorld world;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -25,7 +29,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _game = SoulDuskRunGame();
+    _game = SoulDuskRunGame(world: widget.world);
     _gestures = LaneGestureController(onMove: _game.moveLane);
     WidgetsBinding.instance.addObserver(this);
   }
