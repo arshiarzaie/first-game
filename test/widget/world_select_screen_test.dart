@@ -48,7 +48,7 @@ void main() {
         .widget<GameWidget<SoulDuskRunGame>>(
             find.byType(GameWidget<SoulDuskRunGame>))
         .game!;
-    expect(game.world, equals(GameWorld.moonveilMarsh));
+    expect(game.selectedWorld, equals(GameWorld.moonveilMarsh));
     expect(game.isRunStarted, isFalse);
     expect(game.travelled, equals(0));
     expect(tester.takeException(), isNull);

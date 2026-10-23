@@ -103,7 +103,7 @@ class TrackScene extends PositionComponent
         GameConfig.backdropDriftAmplitude;
     // Clamp keeps the (covering) image from ever leaving a visible gap.
     final horizonFraction =
-        GameConfig.backdropHorizonFractionFor(game.world);
+        GameConfig.backdropHorizonFractionFor(game.selectedWorld);
     var dy = horizonY - imgH * horizonFraction * scale + drift;
     dy = dy.clamp(h - imgH * scale, 0.0);
 
@@ -157,10 +157,10 @@ class TrackScene extends PositionComponent
       ..lineTo(cx - halfBottom, h)
       ..close();
     canvas.drawPath(
-        track, Paint()..color = Color(GameConfig.trackFillArgbFor(game.world)));
+        track, Paint()..color = Color(GameConfig.trackFillArgbFor(game.selectedWorld)));
 
     final edge = Paint()
-      ..color = Color(GameConfig.trackEdgeArgbFor(game.world))
+      ..color = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawLine(
@@ -169,7 +169,7 @@ class TrackScene extends PositionComponent
         Offset(cx + halfTop, horizonY), Offset(cx + halfBottom, h), edge);
 
     final lanePaint = Paint()
-      ..color = Color(GameConfig.trackLaneArgbFor(game.world))
+      ..color = Color(GameConfig.trackLaneArgbFor(game.selectedWorld))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     for (var i = 1; i < GameConfig.laneCount; i++) {
@@ -182,7 +182,7 @@ class TrackScene extends PositionComponent
     }
 
     final stripe = Paint()
-      ..color = Color(GameConfig.trackStripeArgbFor(game.world))
+      ..color = Color(GameConfig.trackStripeArgbFor(game.selectedWorld))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
     const stripeCount = 9;

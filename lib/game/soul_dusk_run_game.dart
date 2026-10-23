@@ -25,12 +25,12 @@ import 'systems/score_manager.dart';
 /// space (the 2.5D illusion), and bridges to Flutter overlays for Game Over
 /// and Pause. The player runs in place; the world moves towards them.
 class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
-  SoulDuskRunGame({int seed = 0, this.world = GameWorld.duskHollow})
+  SoulDuskRunGame({int seed = 0, this.selectedWorld = GameWorld.duskHollow})
       : _seed = seed;
 
   /// The selected world (S4): selects backdrop asset, painted-horizon
   /// anchor and track palette. Gameplay numbers are world-agnostic.
-  final GameWorld world;
+  final GameWorld selectedWorld;
 
   /// Overlay identifiers used in the GameWidget's overlayBuilderMap.
   static const String gameOverOverlayId = 'gameOver';

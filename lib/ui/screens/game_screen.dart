@@ -29,7 +29,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _game = SoulDuskRunGame(world: widget.world);
+    _game = SoulDuskRunGame(selectedWorld: widget.world);
     _gestures = LaneGestureController(onMove: _game.moveLane);
     WidgetsBinding.instance.addObserver(this);
   }
