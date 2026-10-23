@@ -10,6 +10,5 @@ Got dependencies!
 Try `flutter pub outdated` for more information.
 Analyzing first-game...                                         
 
-   info • The member 'world' overrides an inherited member but isn't annotated with '@override'. Try adding the '@override' annotation • lib/game/soul_dusk_run_game.dart:33:19 • annotate_overrides
-  error • 'SoulDuskRunGame.world' ('GameWorld Function()') isn't a valid override of 'FlameGame.world' ('World Function()') • lib/game/soul_dusk_run_game.dart:33:19 • invalid_override
+  error • The argument type 'World' can't be assigned to the parameter type 'GameWorld'.  • lib/game/soul_dusk_run_game.dart:171:67 • argument_type_not_assignable
 
