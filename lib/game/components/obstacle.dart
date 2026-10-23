@@ -8,7 +8,9 @@ import '../soul_dusk_run_game.dart';
 import 'soul_player.dart';
 
 /// A shadow spike the player must dodge by changing lanes.
-/// Greybox placeholder drawn with the Canvas.
+/// S5: renders the pre-rendered dark crystal-spike sprite (chroma-keyed
+/// at load); if the sprite is unavailable the approved canvas crystal
+/// placeholder is drawn instead (never a blank obstacle).
 ///
 /// Spawns at the horizon (depth 1), approaches the player as depth
 /// decreases towards 0, and is recycled when it passes the player plane.
@@ -61,6 +63,25 @@ class Obstacle extends PositionComponent
     super.render(canvas);
     final w = size.x;
     final h = size.y;
+
+    final sprite = game.obstacleSprite;
+    if (sprite != null) {
+      // Contain-fit: keep the sprite's aspect inside the (unchanged)
+      // gameplay box; the hitbox contract is unaffected by art.
+      final fit = (w / sprite.width < h / sprite.height)
+          ? w / sprite.width
+          : h / sprite.height;
+      final dw = sprite.width * fit;
+      final dh = sprite.height * fit;
+      canvas.drawImageRect(
+        sprite,
+        Rect.fromLTWH(0, 0, sprite.width.toDouble(),
+            sprite.height.toDouble()),
+        Rect.fromLTWH((w - dw) / 2, h - dh, dw, dh),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+      return;
+    }
 
     final fill = Paint()..color = const Color(0xFF1C1030);
     final edge = Paint()

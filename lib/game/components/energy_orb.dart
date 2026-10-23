@@ -8,8 +8,10 @@ import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 import 'soul_player.dart';
 
-/// A collectible energy orb. Greybox placeholder: cyan glow ring with a
-/// cream core. Approach/recycle behavior matches [Obstacle].
+/// A collectible energy orb. S5: renders the pre-rendered golden orb
+/// sprite (chroma-keyed at load) over a subtle warm code glow; with the
+/// sprite unavailable, the approved cyan-ring canvas placeholder is
+/// drawn instead. Pulse and approach/recycle behavior match before.
 class EnergyOrb extends PositionComponent
     with CollisionCallbacks, HasGameReference<SoulDuskRunGame> {
   EnergyOrb({required this.lane}) : super(priority: 9);
@@ -62,6 +64,32 @@ class EnergyOrb extends PositionComponent
     final w = size.x;
     final center = Offset(w / 2, w / 2);
     final pulse = 1 + math.sin(_pulsePhase) * 0.07;
+
+    final sprite = game.orbSprite;
+    if (sprite != null) {
+      // warm additive glow keeps the collectible readable over any
+      // world backdrop (matches the Soul-gold identity of the art)
+      canvas.drawCircle(
+        center,
+        w * 0.46 * pulse,
+        Paint()
+          ..color = const Color(0x38FFD166)
+          ..blendMode = BlendMode.plus,
+      );
+      final fit = (w / sprite.width < w / sprite.height)
+          ? w / sprite.width
+          : w / sprite.height;
+      final dw = sprite.width * fit * pulse;
+      final dh = sprite.height * fit * pulse;
+      canvas.drawImageRect(
+        sprite,
+        Rect.fromLTWH(0, 0, sprite.width.toDouble(),
+            sprite.height.toDouble()),
+        Rect.fromCenter(center: center, width: dw, height: dh),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+      return;
+    }
 
     // glow
     canvas.drawCircle(

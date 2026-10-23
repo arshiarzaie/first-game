@@ -56,6 +56,11 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   /// when the asset is unavailable — TrackScene falls back to canvas).
   ui.Image? worldBackdrop;
 
+  /// Decoded S5 prop sprites (null until preloaded / on failure the
+  /// components keep their approved canvas placeholder rendering).
+  ui.Image? orbSprite;
+  ui.Image? obstacleSprite;
+
   // P3B: approved 8-frame run cycle (pre-keyed RGBA plates). Empty when
   // frames could not be decoded — the player then falls back to the
   // single hero sprite, then to the canvas placeholder.
@@ -181,6 +186,21 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
       debugPrint('P2 art: Soul sprite unavailable ($error). '
           'Using canvas placeholder.');
       soulSprite = null;
+    }
+    try {
+      obstacleSprite =
+          await loadKeyedSprite(GameConfig.obstacleSpriteAsset);
+    } catch (error) {
+      debugPrint('S5 art: obstacle sprite unavailable ($error). '
+          'Using canvas placeholder.');
+      obstacleSprite = null;
+    }
+    try {
+      orbSprite = await loadKeyedSprite(GameConfig.orbSpriteAsset);
+    } catch (error) {
+      debugPrint('S5 art: orb sprite unavailable ($error). '
+          'Using canvas placeholder.');
+      orbSprite = null;
     }
     try {
       final loaded = <ui.Image>[];

@@ -95,6 +95,12 @@ class GameConfig {
   /// plate to real alpha at load time and crops to the character.
   static const String soulSpriteAsset = 'assets/images/soul/soul_hero.png';
 
+  /// Bundle paths of the S5 prop sprites (same magenta-plate chroma-key
+  /// pipeline as the Soul art).
+  static const String orbSpriteAsset = 'assets/images/props/energy_orb.png';
+  static const String obstacleSpriteAsset =
+      'assets/images/props/obstacle_spikes.png';
+
   /// Flame `images` cache key for the Dusk Hollow backdrop (cache paths
   /// are relative to `assets/images/`).
   static const String duskHollowBackdropKey =

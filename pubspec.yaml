@@ -45,6 +45,10 @@ flutter:
     - assets/images/worlds/dusk_hollow/backdrop.png
     # S4: playable Moonveil Marsh world backdrop.
     - assets/images/worlds/moonveil_marsh/backdrop.png
+    # S5: pre-rendered prop sprites on magenta plates (chroma-keyed at
+    # load by lib/game/presentation/chroma_key.dart, like the Soul art).
+    - assets/images/props/energy_orb.png
+    - assets/images/props/obstacle_spikes.png
     # S1 UI shell: cinematic title key art (approved concept board identity).
     # S3: + world-card art for the world select screen (directory include).
     - assets/images/ui/
