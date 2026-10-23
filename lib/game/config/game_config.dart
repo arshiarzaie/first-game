@@ -110,6 +110,10 @@ class GameConfig {
   static const String moonveilMarshBackdropKey =
       'worlds/moonveil_marsh/backdrop.png';
 
+  /// Flame `images` cache key for the Emberfall Canyon backdrop (S7).
+  static const String emberfallCanyonBackdropKey =
+      'worlds/emberfall_canyon/backdrop.png';
+
   /// Where the backdrop's painted horizon sits inside the image, as a
   /// fraction of image height (tuned to the current asset; S2 backdrop
   /// v2 carries its golden glow/citadel horizon at ~245/768).
@@ -125,6 +129,8 @@ class GameConfig {
         return duskHollowBackdropKey;
       case GameWorld.moonveilMarsh:
         return moonveilMarshBackdropKey;
+      case GameWorld.emberfallCanyon:
+        return emberfallCanyonBackdropKey;
     }
   }
 
@@ -135,6 +141,7 @@ class GameConfig {
     switch (world) {
       case GameWorld.duskHollow:
       case GameWorld.moonveilMarsh:
+      case GameWorld.emberfallCanyon:
         return backdropHorizonFraction;
     }
   }
@@ -147,6 +154,8 @@ class GameConfig {
         return 0xB3241738;
       case GameWorld.moonveilMarsh:
         return 0xB30E2B32;
+      case GameWorld.emberfallCanyon:
+        return 0xB3301D12;
     }
   }
 
@@ -157,6 +166,8 @@ class GameConfig {
         return 0x884DD8FF;
       case GameWorld.moonveilMarsh:
         return 0x886FDCD2;
+      case GameWorld.emberfallCanyon:
+        return 0x88FF9F68;
     }
   }
 
@@ -167,6 +178,8 @@ class GameConfig {
         return 0x444DD8FF;
       case GameWorld.moonveilMarsh:
         return 0x446FDCD2;
+      case GameWorld.emberfallCanyon:
+        return 0x44FF9F68;
     }
   }
 
@@ -177,6 +190,8 @@ class GameConfig {
         return 0x44806FB8;
       case GameWorld.moonveilMarsh:
         return 0x448FBFC0;
+      case GameWorld.emberfallCanyon:
+        return 0x44C97A4E;
     }
   }
 
@@ -218,7 +233,6 @@ class GameConfig {
   static const double runCycleFitBoost = 1.22;
 }
 
-/// Playable worlds (S4). Emberfall Canyon stays concept-only until its
-/// stage ships. World choice changes assets/palette only — never the
-/// gameplay projection, difficulty or identity.
-enum GameWorld { duskHollow, moonveilMarsh }
+/// Playable worlds. World choice changes assets/palette only — never
+/// the gameplay projection, difficulty or identity.
+enum GameWorld { duskHollow, moonveilMarsh, emberfallCanyon }

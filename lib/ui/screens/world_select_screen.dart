@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import '../../game/config/game_config.dart';
 import 'game_screen.dart';
 
-/// World Select screen (S3): three world cards per concept board.
-/// Dusk Hollow and Moonveil Marsh are playable (S4); Emberfall Canyon is
-/// visible but locked ('COMING SOON') until its stage ships.
+/// World Select screen (S3): the three world cards per concept board.
+/// All three worlds are playable (S4 Moonveil Marsh, S7 Emberfall
+/// Canyon); the locked-state 'COMING SOON' rendering stays available
+/// for any future world added before its content is ready.
 class WorldSelectScreen extends StatelessWidget {
   const WorldSelectScreen({super.key});
 
@@ -69,13 +70,22 @@ class WorldSelectScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const Expanded(
+                      Expanded(
                         child: _WorldCard(
                           title: 'EMBERFALL CANYON',
                           imageAsset:
                               'assets/images/ui/world_emberfall.png',
-                          accent: Color(0xFFFF9F68),
-                          unlocked: false,
+                          accent: const Color(0xFFFF9F68),
+                          unlocked: true,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const GameScreen(
+                                  world: GameWorld.emberfallCanyon,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(height: 12),
