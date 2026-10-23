@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// Shown when the run ends. Displays the score and the PLAY AGAIN action.
 /// S1 UI shell: concept-board styled card (violet glass panel, gold score
-/// pill, warm coral CTA). Test contract: 'GAME OVER', 'Score: <n>' and
+/// pill, warm coral CTA). Test contract: 'GAME OVER', `'Score: N'` and
 /// 'PLAY AGAIN' texts must remain findable.
 class GameOverOverlay extends StatelessWidget {
   const GameOverOverlay({
