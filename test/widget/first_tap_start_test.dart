@@ -19,6 +19,9 @@ void main() {
     await tester.pumpWidget(const SoulDuskRunApp());
     await tester.pump();
     await tester.tap(find.text('PLAY'));
+    // S3: PLAY leads to World Select; enter the game via DUSK HOLLOW.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DUSK HOLLOW'));
 
     // A1: settle into the scene; assert still idle (auto-start would break
     // this — the game ticker pumps real frames here).
@@ -75,6 +78,9 @@ void main() {
     await tester.pumpWidget(const SoulDuskRunApp());
     await tester.pump();
     await tester.tap(find.text('PLAY'));
+    // S3: PLAY leads to World Select; enter the game via DUSK HOLLOW.
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DUSK HOLLOW'));
     for (var i = 0; i < 60; i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }

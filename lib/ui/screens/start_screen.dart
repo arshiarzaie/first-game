@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'game_screen.dart';
+import 'world_select_screen.dart';
 
 /// Cinematic title screen (S1 UI shell, concept-board direction):
 /// full-bleed approved key art, cream/gold wordmark, tagline and the
@@ -85,7 +85,7 @@ class StartScreen extends StatelessWidget {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) => const GameScreen(),
+                        builder: (_) => const WorldSelectScreen(),
                       ),
                     );
                   },

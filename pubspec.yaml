@@ -44,4 +44,5 @@ flutter:
     - assets/images/soul/run/frame_08.png
     - assets/images/worlds/dusk_hollow/backdrop.png
     # S1 UI shell: cinematic title key art (approved concept board identity).
-    - assets/images/ui/title_key_art.png
+    # S3: + world-card art for the world select screen (directory include).
+    - assets/images/ui/

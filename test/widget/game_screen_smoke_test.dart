@@ -26,7 +26,10 @@ void main() {
     expect(find.text('PLAY'), findsOneWidget);
 
     // Step 2: navigate into the game and run real frames.
+    // S3: PLAY leads to World Select; enter the game via DUSK HOLLOW.
     await tester.tap(find.text('PLAY'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DUSK HOLLOW'));
     for (var i = 0; i < 150; i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
