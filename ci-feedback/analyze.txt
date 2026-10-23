@@ -10,5 +10,7 @@ Got dependencies!
 Try `flutter pub outdated` for more information.
 Analyzing first-game...                                         
 
-   info • Angle brackets will be interpreted as HTML. Try using backticks around the content with angle brackets, or try replacing `<` with `&lt;` and `>` with `&gt;` • lib/ui/overlays/game_over_overlay.dart:5:64 • unintended_html_in_doc_comment
+   info • Unnecessary use of multiple underscores. Try using '_' • lib/ui/screens/world_select_screen.dart:128:31 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores. Try using '_' • lib/ui/screens/world_select_screen.dart:128:35 • unnecessary_underscores
+warning • Unused import: 'package:flutter/widgets.dart'. Try removing the import directive • test/widget/world_select_screen_test.dart:3:8 • unused_import
 
