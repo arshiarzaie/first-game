@@ -168,7 +168,8 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   /// decoded; any failure leaves the Canvas placeholders active.
   Future<void> _preloadArt() async {
     try {
-      worldBackdrop = await images.load(GameConfig.backdropKeyFor(world));
+      worldBackdrop =
+          await images.load(GameConfig.backdropKeyFor(selectedWorld));
     } catch (error) {
       debugPrint('P2 art: world backdrop unavailable ($error). '
           'Using canvas placeholder.');
