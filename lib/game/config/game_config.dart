@@ -101,8 +101,9 @@ class GameConfig {
       'worlds/dusk_hollow/backdrop.png';
 
   /// Where the backdrop's painted horizon sits inside the image, as a
-  /// fraction of image height (tuned to the current asset).
-  static const double backdropHorizonFraction = 0.27;
+  /// fraction of image height (tuned to the current asset; S2 backdrop
+  /// v2 carries its golden glow/citadel horizon at ~245/768).
+  static const double backdropHorizonFraction = 0.319;
 
   /// Gentle idle float of the world backdrop, in px (world breathing).
   static const double backdropDriftAmplitude = 5;
