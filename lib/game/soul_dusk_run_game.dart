@@ -141,6 +141,14 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
           color: Color(0xFFF6E7C8),
           fontSize: 20,
           fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+          shadows: [
+            Shadow(
+              color: Color(0xB3000000),
+              blurRadius: 8,
+              offset: Offset(0, 1),
+            ),
+          ],
         ),
       ),
       position: Vector2(16, 48),
