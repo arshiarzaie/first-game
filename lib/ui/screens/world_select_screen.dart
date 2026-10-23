@@ -125,7 +125,7 @@ class _WorldCard extends StatelessWidget {
           Image.asset(
             imageAsset,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(color: const Color(0xFF241A40)),
+            errorBuilder: (_, _, _) => Container(color: const Color(0xFF241A40)),
           ),
           // Bottom gradient for label readability.
           const Align(
