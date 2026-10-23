@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'settings_screen.dart';
 import 'world_select_screen.dart';
 
 /// Cinematic title screen (S1 UI shell, concept-board direction):
@@ -49,6 +50,22 @@ class StartScreen extends StatelessWidget {
                 ),
               ),
               child: SizedBox(width: double.infinity, height: 260),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topRight,
+              child: IconButton(
+                icon: const Icon(Icons.settings, color: Color(0xB3F6E7C8)),
+                tooltip: 'Settings',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SettingsScreen(),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
           SafeArea(
