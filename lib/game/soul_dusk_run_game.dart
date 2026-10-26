@@ -16,6 +16,7 @@ import 'presentation/chroma_key.dart';
 import 'systems/difficulty_manager.dart';
 import 'systems/lane_system.dart';
 import 'systems/obstacle_spawner.dart';
+import 'systems/progress_store.dart';
 import 'systems/score_manager.dart';
 
 /// Flame game root for SOUL: DUSK RUN (Phase 1 greybox).
@@ -132,10 +133,15 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
 
   // --------------------------------------------------------------- lifecycle
 
+  /// Banked sun progress (S8); loaded lazily so persistence issues can
+  /// never block the scene from appearing.
+  ProgressStore? _progress;
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
     _generator = SeededObstacleGenerator(seed: _seed);
+    unawaited(ProgressStore.load().then((store) => _progress = store));
 
     // Components attach immediately so the scene is interactive at once;
     // production art decodes in the background and the components pick it
@@ -273,6 +279,9 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
       return;
     }
     _ended = true;
+    // S8: bank this run's collected suns (orbs) into persistent progress
+    // exactly once per run end.
+    unawaited(_progress?.addSuns(score.orbsCollected) ?? Future.value());
     pauseEngine();
     overlays.add(gameOverOverlayId);
   }

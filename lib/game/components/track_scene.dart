@@ -157,7 +157,22 @@ class TrackScene extends PositionComponent
       ..lineTo(cx - halfBottom, h)
       ..close();
     canvas.drawPath(
-        track, Paint()..color = Color(GameConfig.trackFillArgbFor(game.selectedWorld)));
+      track,
+      Paint()
+        ..shader = Gradient.linear(
+          Offset(cx, horizonY),
+          Offset(cx, h),
+          [
+            // near the horizon the painted world floor shows through so
+            // the track visually melts into the selected world's ground;
+            // it densifies towards the player for readability (S8).
+            Color(GameConfig.trackFillArgbFor(game.selectedWorld))
+                .withValues(alpha: 0.25),
+            Color(GameConfig.trackFillArgbFor(game.selectedWorld))
+                .withValues(alpha: 0.85),
+          ],
+        ),
+    );
 
     final edge = Paint()
       ..color = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld))

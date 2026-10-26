@@ -195,6 +195,20 @@ class GameConfig {
     }
   }
 
+  // ---- World unlocking (S8) ----
+  /// Total collected suns (energy orbs banked across all runs at run
+  /// end) required before a world unlocks. Dusk Hollow is always open.
+  static int worldUnlockSunsFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 0;
+      case GameWorld.moonveilMarsh:
+        return 25;
+      case GameWorld.emberfallCanyon:
+        return 60;
+    }
+  }
+
   /// Gentle idle float of the world backdrop, in px (world breathing).
   static const double backdropDriftAmplitude = 5;
 

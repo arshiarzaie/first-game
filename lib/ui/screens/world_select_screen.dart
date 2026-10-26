@@ -1,17 +1,38 @@
 import 'package:flutter/material.dart';
 
 import '../../game/config/game_config.dart';
+import '../../game/systems/progress_store.dart';
 import 'game_screen.dart';
 
-/// World Select screen (S3): the three world cards per concept board.
-/// All three worlds are playable (S4 Moonveil Marsh, S7 Emberfall
-/// Canyon); the locked-state 'COMING SOON' rendering stays available
-/// for any future world added before its content is ready.
-class WorldSelectScreen extends StatelessWidget {
+/// World Select screen (S3 shell; S4/S7 worlds; S8 sun-gating): the
+/// three world cards per concept board. Dusk Hollow is always open;
+/// Moonveil Marsh and Emberfall Canyon unlock once the player has
+/// banked enough suns (energy orbs) across runs — thresholds in
+/// GameConfig.worldUnlockSunsFor.
+class WorldSelectScreen extends StatefulWidget {
   const WorldSelectScreen({super.key});
 
   @override
+  State<WorldSelectScreen> createState() => _WorldSelectScreenState();
+}
+
+class _WorldSelectScreenState extends State<WorldSelectScreen> {
+  ProgressStore? _progress;
+
+  @override
+  void initState() {
+    super.initState();
+    ProgressStore.load().then((store) {
+      if (mounted) {
+        setState(() => _progress = store);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final suns = _progress?.totalSuns ?? 0;
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -30,6 +51,20 @@ class WorldSelectScreen extends StatelessWidget {
                     icon: const Icon(Icons.arrow_back, color: Colors.white70),
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
+                  const Spacer(),
+                  const Icon(Icons.wb_sunny_rounded,
+                      color: Color(0xFFFFD166), size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    'SUNS: $suns',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2,
+                      color: Color(0xFFFFD166),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                 ],
               ),
               const SizedBox(height: 8),
@@ -72,16 +107,21 @@ class WorldSelectScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       Expanded(
                         child: _WorldCard(
-                          title: 'EMBERFALL CANYON',
-                          imageAsset:
-                              'assets/images/ui/world_emberfall.png',
-                          accent: const Color(0xFFFF9F68),
-                          unlocked: true,
+                          title: 'MOONVEIL MARSH',
+                          imageAsset: 'assets/images/ui/world_moonveil.png',
+                          accent: const Color(0xFF6FDCD2),
+                          unlocked: suns >=
+                              GameConfig.worldUnlockSunsFor(
+                                  GameWorld.moonveilMarsh),
+                          requirement:
+                              GameConfig.worldUnlockSunsFor(
+                                  GameWorld.moonveilMarsh),
+                          currentSuns: suns,
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute<void>(
                                 builder: (_) => const GameScreen(
-                                  world: GameWorld.emberfallCanyon,
+                                  world: GameWorld.moonveilMarsh,
                                 ),
                               ),
                             );
@@ -91,16 +131,21 @@ class WorldSelectScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       Expanded(
                         child: _WorldCard(
-                          title: 'MOONVEIL MARSH',
-                          imageAsset:
-                              'assets/images/ui/world_moonveil.png',
-                          accent: const Color(0xFF6FDCD2),
-                          unlocked: true,
+                          title: 'EMBERFALL CANYON',
+                          imageAsset: 'assets/images/ui/world_emberfall.png',
+                          accent: const Color(0xFFFF9F68),
+                          unlocked: suns >=
+                              GameConfig.worldUnlockSunsFor(
+                                  GameWorld.emberfallCanyon),
+                          requirement:
+                              GameConfig.worldUnlockSunsFor(
+                                  GameWorld.emberfallCanyon),
+                          currentSuns: suns,
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute<void>(
                                 builder: (_) => const GameScreen(
-                                  world: GameWorld.moonveilMarsh,
+                                  world: GameWorld.emberfallCanyon,
                                 ),
                               ),
                             );
@@ -126,6 +171,8 @@ class _WorldCard extends StatelessWidget {
     required this.imageAsset,
     required this.accent,
     required this.unlocked,
+    this.requirement = 0,
+    this.currentSuns = 0,
     this.onTap,
   });
 
@@ -133,6 +180,11 @@ class _WorldCard extends StatelessWidget {
   final String imageAsset;
   final Color accent;
   final bool unlocked;
+
+  /// Suns needed to unlock (locked cards only) and current total shown
+  /// as progress (`$currentSuns / $requirement SUNS`).
+  final int requirement;
+  final int currentSuns;
   final VoidCallback? onTap;
 
   @override
@@ -181,14 +233,32 @@ class _WorldCard extends StatelessWidget {
             Container(
               color: const Color(0xAA140D26),
               alignment: Alignment.center,
-              child: const Text(
-                'COMING SOON',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 4,
-                  color: Colors.white70,
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.lock_outline_rounded,
+                      color: Colors.white70, size: 22),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'LOCKED',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 4,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$currentSuns / $requirement SUNS',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 2,
+                      color: Color(0xB3FFD166),
+                    ),
+                  ),
+                ],
               ),
             ),
         ],
