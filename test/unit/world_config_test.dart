@@ -21,6 +21,13 @@ void main() {
     }
   });
 
+  test('track strip keys: dusk has one, others fall back to gradient', () {
+    expect(GameConfig.trackStripKeyFor(GameWorld.duskHollow),
+        equals('worlds/dusk_hollow/track_strip.png'));
+    expect(GameConfig.trackStripKeyFor(GameWorld.moonveilMarsh), isNull);
+    expect(GameConfig.trackStripKeyFor(GameWorld.emberfallCanyon), isNull);
+  });
+
   test('every world has a complete opaque-free track palette', () {
     for (final world in GameWorld.values) {
       final values = <int>[

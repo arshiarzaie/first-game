@@ -114,6 +114,23 @@ class GameConfig {
   static const String emberfallCanyonBackdropKey =
       'worlds/emberfall_canyon/backdrop.png';
 
+  /// Perspective track surface strips (S8b). Null = canvas gradient only
+  /// until that world's strip ships (generated-asset limit this turn;
+  /// Moonveil/Emberfall strips queued next).
+  static const String duskHollowTrackStripKey =
+      'worlds/dusk_hollow/track_strip.png';
+
+  /// Track strip per world, or null when the canvas gradient must be used.
+  static String? trackStripKeyFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return duskHollowTrackStripKey;
+      case GameWorld.moonveilMarsh:
+      case GameWorld.emberfallCanyon:
+        return null;
+    }
+  }
+
   /// Where the backdrop's painted horizon sits inside the image, as a
   /// fraction of image height (tuned to the current asset; S2 backdrop
   /// v2 carries its golden glow/citadel horizon at ~245/768).

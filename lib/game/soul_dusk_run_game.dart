@@ -62,6 +62,11 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
   ui.Image? orbSprite;
   ui.Image? obstacleSprite;
 
+  /// Decoded S8b perspective track surface strip for the selected world
+  /// (null until preloaded / null when the world has no strip yet —
+  /// TrackScene keeps its canvas gradient in that case).
+  ui.Image? trackStrip;
+
   // P3B: approved 8-frame run cycle (pre-keyed RGBA plates). Empty when
   // frames could not be decoded — the player then falls back to the
   // single hero sprite, then to the canvas placeholder.
@@ -192,6 +197,14 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
       debugPrint('P2 art: Soul sprite unavailable ($error). '
           'Using canvas placeholder.');
       soulSprite = null;
+    }
+    try {
+      final trackKey = GameConfig.trackStripKeyFor(selectedWorld);
+      trackStrip = trackKey == null ? null : await images.load(trackKey);
+    } catch (error) {
+      debugPrint('S8b art: track strip unavailable ($error). '
+          'Using canvas gradient.');
+      trackStrip = null;
     }
     try {
       obstacleSprite =

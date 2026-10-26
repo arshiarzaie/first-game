@@ -174,6 +174,52 @@ class TrackScene extends PositionComponent
         ),
     );
 
+    // S8b: world-authored perspective track surface strip. The strip is
+    // drawn cover-style inside the trapezoid and scrolled modularly with
+    // travelled distance so the ground itself flows toward the player.
+    final strip = game.trackStrip;
+    if (strip != null) {
+      canvas.save();
+      canvas.clipPath(track);
+      final stripH = strip.height.toDouble();
+      final dstTop = horizonY;
+      final dstH = h - horizonY;
+      final dstRect =
+          Rect.fromLTWH(cx - halfBottom, dstTop, 2 * halfBottom, dstH);
+      // scroll phase: one strip length per one track length
+      final scroll =
+          (game.travelled / GameConfig.trackLength % 1.0) * stripH;
+      if (scroll < 1.0) {
+        canvas.drawImageRect(
+          strip,
+          Rect.fromLTWH(0, 0, strip.width.toDouble(), stripH),
+          dstRect,
+          Paint()..filterQuality = FilterQuality.medium,
+        );
+        canvas.restore();
+        // continue with edges/lanes below
+      } else {
+      final partH = stripH - scroll;
+      // upper tile: tail segment of the source strip near the horizon
+      canvas.drawImageRect(
+        strip,
+        Rect.fromLTWH(0, 0, strip.width.toDouble(), partH),
+        Rect.fromLTWH(dstRect.left, dstRect.top, dstRect.width,
+            dstH * (partH / stripH)),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+      // lower tile: wrapped head segment flowing toward the player
+      canvas.drawImageRect(
+        strip,
+        Rect.fromLTWH(0, partH, strip.width.toDouble(), scroll),
+        Rect.fromLTWH(dstRect.left, dstRect.top + dstH * (partH / stripH),
+            dstRect.width, dstH * (scroll / stripH)),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+      canvas.restore();
+      }
+    }
+
     final edge = Paint()
       ..color = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld))
       ..style = PaintingStyle.stroke
