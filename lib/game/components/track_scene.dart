@@ -22,8 +22,49 @@ class TrackScene extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   TrackScene() : super(priority: -100);
 
+  // S11 perspective mesh grid: 12 horizontal columns (divisible by 6 so
+  // column boundaries land directly on the 1/3 & 2/3 rails and 1/2 center,
+  // eliminating affine trapezoid sawtooth warp) x 48 foreshortened rows.
+  static const int _meshCols = 12;
+  static const int _meshRows = 48;
+  static final Float64List _identityMatrix4 = Float64List.fromList(const [
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+  ]);
+
+  final Float32List _meshPos =
+      Float32List((_meshRows + 1) * (_meshCols + 1) * 2);
+  final Float32List _meshTex =
+      Float32List((_meshRows + 1) * (_meshCols + 1) * 2);
+  late final Uint16List _meshIdx = _buildMeshIndices();
+
   late final List<Offset> _stars = _makeStars();
   late final List<_Mote> _motes = _makeMotes();
+
+  static Uint16List _buildMeshIndices() {
+    const stride = _meshCols + 1;
+    final out = Uint16List(_meshRows * _meshCols * 6);
+    var k = 0;
+    for (var r = 0; r < _meshRows; r++) {
+      final row0 = r * stride;
+      final row1 = (r + 1) * stride;
+      for (var c = 0; c < _meshCols; c++) {
+        final a = row0 + c;
+        final b = a + 1;
+        final d = row1 + c;
+        final e = d + 1;
+        out[k++] = a;
+        out[k++] = b;
+        out[k++] = d;
+        out[k++] = b;
+        out[k++] = e;
+        out[k++] = d;
+      }
+    }
+    return out;
+  }
 
   static List<Offset> _makeStars() {
     final random = math.Random(7);
@@ -147,9 +188,15 @@ class TrackScene extends PositionComponent
   /// floor show through so world and path read as one place.
   void _renderTrack(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
+    final spanToPlayer = math.max(1.0, game.playerPlaneY - horizonY);
+    final aMax = (h - horizonY) / spanToPlayer;
     final cx = w / 2;
     final halfTop = game.halfWidthForDepth(1);
-    final halfBottom = game.halfWidthForDepth(0);
+    final halfPlayer = game.halfWidthForDepth(0);
+    // Extrapolate the exact linear-in-approach cone past playerPlaneY
+    // (0.86h) to the screen bottom (1.00h) so track and entity projection
+    // stay 1:1 aligned at every depth while filling the lower frame (S11).
+    final halfBottom = halfTop + (halfPlayer - halfTop) * aMax;
 
     final track = Path()
       ..moveTo(cx - halfTop, horizonY)
@@ -175,15 +222,43 @@ class TrackScene extends PositionComponent
         ),
     );
 
-    // S10: world-authored perspective track surface strip. The strip is
-    // warped into the trapezoid with a triangle mesh whose rows follow
-    // the exact gameplay projection (yForDepth / halfWidthForDepth), so
-    // the painted rails stay on the track edges at every depth, and the
-    // vertical texture coordinate scrolls with travelled distance so the
-    // ground flows toward the player.
+    // S11: world-authored orthographic track strip warped with true 2.5D
+    // perspective foreshortening across a 12x48 mesh all the way to the
+    // screen bottom, with a soft top mist fade into the horizon glow.
     final strip = game.trackStrip;
-    if (strip != null) {
-      _renderStripMesh(canvas, strip, cx);
+    if (strip != null && h > horizonY) {
+      final trackBounds = Rect.fromLTWH(0, horizonY, w, h - horizonY);
+      canvas.saveLayer(trackBounds, Paint());
+      _renderStripMesh(
+        canvas,
+        strip,
+        horizonY: horizonY,
+        spanToPlayer: spanToPlayer,
+        aMax: aMax,
+        cx: cx,
+        halfTop: halfTop,
+        halfPlayer: halfPlayer,
+      );
+      final curb = Paint()
+        ..color = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawLine(
+          Offset(cx - halfTop, horizonY), Offset(cx - halfBottom, h), curb);
+      canvas.drawLine(
+          Offset(cx + halfTop, horizonY), Offset(cx + halfBottom, h), curb);
+      final fadeEnd = horizonY + (h - horizonY) * 0.06;
+      canvas.drawRect(
+        Rect.fromLTWH(0, horizonY, w, fadeEnd - horizonY + 1),
+        Paint()
+          ..blendMode = BlendMode.dstIn
+          ..shader = Gradient.linear(
+            Offset(0, horizonY),
+            Offset(0, fadeEnd),
+            const [Color(0x00FFFFFF), Color(0xFFFFFFFF)],
+          ),
+      );
+      canvas.restore();
     }
 
     // Code-drawn rails only when the authored strip is unavailable: the
@@ -199,17 +274,21 @@ class TrackScene extends PositionComponent
           Offset(cx + halfTop, horizonY), Offset(cx + halfBottom, h), edge);
     }
 
-    final lanePaint = Paint()
-      ..color = Color(GameConfig.trackLaneArgbFor(game.selectedWorld))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    for (var i = 1; i < GameConfig.laneCount; i++) {
-      final f = i / GameConfig.laneCount;
-      canvas.drawLine(
-        Offset(cx - halfTop + 2 * halfTop * f, horizonY),
-        Offset(cx - halfBottom + 2 * halfBottom * f, h),
-        lanePaint,
-      );
+    // S11: baked rails sit at the lane boundaries (thirds of the strip
+    // width), so code lane dividers are fallback-only too.
+    if (strip == null) {
+      final lanePaint = Paint()
+        ..color = Color(GameConfig.trackLaneArgbFor(game.selectedWorld))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      for (var i = 1; i < GameConfig.laneCount; i++) {
+        final f = i / GameConfig.laneCount;
+        canvas.drawLine(
+          Offset(cx - halfTop + 2 * halfTop * f, horizonY),
+          Offset(cx - halfBottom + 2 * halfBottom * f, h),
+          lanePaint,
+        );
+      }
     }
 
     // Flowing depth stripes are the fallback motion cue — the authored
@@ -235,64 +314,60 @@ class TrackScene extends PositionComponent
     }
   }
 
-  /// Warps the authored strip into the track trapezoid as a triangle
-  /// mesh (S10). Row t (0 = horizon, 1 = bottom edge) is placed with the
-  /// exact gameplay projection functions so painted rails align with the
-  /// lane geometry at every depth. Texture coordinates address strip
-  /// pixels, one strip length per trackLength cycle, scrolling with
-  /// travelled distance (repeated tiling wraps the phase).
-  void _renderStripMesh(Canvas canvas, Image strip, double cx) {
-    const rows = 16; // vertical segments of the perspective warp
+  /// Warps the orthographic strip into the 2.5D track cone as a 12x48
+  /// subdivided triangle mesh (S11). Sampling world distance `u` uniformly
+  /// and projecting `a = u^perspectiveExponent` locks brick scroll 1:1 to
+  /// obstacle/orb motion and compresses stone courses naturally toward the
+  /// horizon, while the 12 horizontal subdivisions eliminate affine
+  /// trapezoid sawtooth distortion on the baked rails.
+  void _renderStripMesh(
+    Canvas canvas,
+    Image strip, {
+    required double horizonY,
+    required double spanToPlayer,
+    required double aMax,
+    required double cx,
+    required double halfTop,
+    required double halfPlayer,
+  }) {
     final stripW = strip.width.toDouble();
     final stripH = strip.height.toDouble();
-    final scroll = game.travelled / GameConfig.trackLength;
+    final scroll = (game.travelled / GameConfig.trackLength) % 1.0;
+    final uMax =
+        math.pow(math.max(0.0, aMax), 1 / GameConfig.perspectiveExponent)
+            .toDouble();
 
-    final positions = Float32List((rows + 1) * 4);
-    final texs = Float32List((rows + 1) * 4);
-    final indices = <int>[];
-    for (var i = 0; i <= rows; i++) {
-      final t = i / rows; // 0 at the horizon, 1 at the bottom edge
-      final depth = 1 - t;
-      final y = game.yForDepth(depth);
-      final half = game.halfWidthForDepth(depth);
-      // v grows towards the player; a fixed strip feature therefore
-      // slides toward the bottom edge as distance accumulates.
-      final v = (t - scroll) * stripH;
-      final base = i * 4;
-      positions[base] = cx - half;
-      positions[base + 1] = y;
-      positions[base + 2] = cx + half;
-      positions[base + 3] = y;
-      texs[base] = 0;
-      texs[base + 1] = v;
-      texs[base + 2] = stripW;
-      texs[base + 3] = v;
-    }
-    for (var i = 0; i < rows; i++) {
-      final a = 2 * i;
-      final b = a + 1;
-      final c = a + 2;
-      final d = a + 3;
-      indices.addAll([a, b, c, b, d, c]);
+    var p = 0;
+    for (var r = 0; r <= _meshRows; r++) {
+      final u = (r / _meshRows) * uMax;
+      final a = math.pow(u, GameConfig.perspectiveExponent).toDouble();
+      final y = horizonY + spanToPlayer * a;
+      final half = halfTop + (halfPlayer - halfTop) * a;
+      final v = (u - scroll) * stripH;
+      final left = cx - half;
+      final width = half * 2;
+      for (var c = 0; c <= _meshCols; c++) {
+        final fx = c / _meshCols;
+        _meshPos[p] = left + width * fx;
+        _meshPos[p + 1] = y;
+        _meshTex[p] = stripW * fx;
+        _meshTex[p + 1] = v;
+        p += 2;
+      }
     }
 
     final vertices = Vertices.raw(
       VertexMode.triangles,
-      positions,
-      textureCoordinates: texs,
-      indices: Uint16List.fromList(indices),
+      _meshPos,
+      textureCoordinates: _meshTex,
+      indices: _meshIdx,
     );
     final paint = Paint()
       ..shader = ImageShader(
         strip,
+        TileMode.clamp,
         TileMode.repeated,
-        TileMode.repeated,
-        Float64List.fromList(const [
-          1.0, 0.0, 0.0, 0.0,
-          0.0, 1.0, 0.0, 0.0,
-          0.0, 0.0, 1.0, 0.0,
-          0.0, 0.0, 0.0, 1.0,
-        ]),
+        _identityMatrix4,
         filterQuality: FilterQuality.medium,
       );
     canvas.drawVertices(vertices, BlendMode.srcOver, paint);

@@ -64,14 +64,22 @@ class GameConfig {
   static const double farScale = 0.16;
 
   /// Half-width of the track at the horizon, as a fraction of screen width.
-  static const double trackTopHalfWidthRatio = 0.13;
+  /// S11: tuned to 0.11 so the causeway converges cleanly into the distant
+  /// horizon arch/bridge across all worlds.
+  static const double trackTopHalfWidthRatio = 0.11;
 
-  /// Half-width of the track at the bottom edge, as a fraction of screen width.
-  static const double trackBottomHalfWidthRatio = 0.55;
+  /// Half-width of the track on the player plane (depth 0, y = 0.86h), as
+  /// a fraction of screen width. S11: widened to 0.54 (which extrapolates
+  /// along the same straight cone to ~0.65w at the bottom screen edge) so
+  /// the runway fills the lower frame in Subway-style framing while
+  /// keeping lane geometry and entity projection 1:1 locked.
+  static const double trackBottomHalfWidthRatio = 0.54;
 
   /// Lane center offset from track center as a fraction of current
   /// half-width (lane N sits at (N - 1) * this value for 3 lanes).
-  static const double laneSpreadRatio = 0.66;
+  /// S11: 0.65 aligns gameplay lanes within <1%w of the painted 1/3-2/3
+  /// stone lane centers across all depths without outer-edge clipping.
+  static const double laneSpreadRatio = 0.65;
 
   /// Exponent of the depth->screen easing curve (>1 = slow far, fast near).
   static const double perspectiveExponent = 2.0;
@@ -84,7 +92,7 @@ class GameConfig {
   /// from 0.21 — on-device reads still showed the sun-head cycle small;
   /// fairness unchanged — hitbox keeps the same 0.78 grace factor and
   /// the inter-lane clearance still exceeds the summed widths).
-  static const double playerWidthRatio = 0.24;
+  static const double playerWidthRatio = 0.25;
 
   /// Obstacle/orb base width as a fraction of screen width (S10: raised
   /// with the player so entities stay proportional to the hero).
@@ -268,7 +276,7 @@ class GameConfig {
   /// humanoid silhouette at ≈ 76–82% of the 512×512 plate height (vs ≈
   /// 53% for the retired ball-design frames → boost scale ≈53/80); this
   /// boost normalizes the drawn silhouette to the established hero size.
-  static const double runCycleFitBoost = 1.22;
+  static const double runCycleFitBoost = 1.26;
 }
 
 /// Playable worlds. World choice changes assets/palette only — never

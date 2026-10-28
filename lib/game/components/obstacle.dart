@@ -73,6 +73,16 @@ class Obstacle extends PositionComponent
           : h / sprite.height;
       final dw = sprite.width * fit;
       final dh = sprite.height * fit;
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(w / 2, h * 0.93),
+          width: dw * 0.80,
+          height: dh * 0.22,
+        ),
+        Paint()
+          ..color = const Color(0x800D051A)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
       canvas.drawImageRect(
         sprite,
         Rect.fromLTWH(0, 0, sprite.width.toDouble(),

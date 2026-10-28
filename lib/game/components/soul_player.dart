@@ -98,11 +98,6 @@ class SoulPlayer extends PositionComponent
   void _renderFrame(Canvas canvas, Image frame) {
     final w = size.x;
     final h = size.y;
-    canvas.save();
-    canvas.translate(w / 2, h / 2);
-    canvas.rotate(_lean * GameConfig.playerLeanAngle);
-    canvas.scale(1 + _lean.abs() * 0.08, 1 - _lean.abs() * 0.06);
-
     final imgW = frame.width.toDouble();
     final imgH = frame.height.toDouble();
     // Frames hold ~53% content inside a 512×512 plate; the fit boost
@@ -111,13 +106,46 @@ class SoulPlayer extends PositionComponent
       (w * 1.30 * GameConfig.runCycleFitBoost) / imgW,
       (h * 1.30 * GameConfig.runCycleFitBoost) / imgH,
     );
+    final dw = imgW * fit;
+    final dh = imgH * fit;
+
+    // Ground aura + contact shadow planted on the stone surface beneath
+    // Soul's feet (unrotated so the floor plane stays horizontal during
+    // lane-switch leans).
+    final footCenter = Offset(w / 2, h / 2 + dh * 0.36);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: footCenter,
+        width: dw * 0.62,
+        height: dh * 0.15,
+      ),
+      Paint()
+        ..color = const Color(0x40FFB830)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w / 2, h / 2 + dh * 0.37),
+        width: dw * 0.38,
+        height: dh * 0.09,
+      ),
+      Paint()
+        ..color = const Color(0x8810061E)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+
+    canvas.save();
+    canvas.translate(w / 2, h / 2);
+    canvas.rotate(_lean * GameConfig.playerLeanAngle);
+    canvas.scale(1 + _lean.abs() * 0.08, 1 - _lean.abs() * 0.06);
+
     canvas.drawImageRect(
       frame,
       Rect.fromLTWH(0, 0, imgW, imgH),
       Rect.fromCenter(
         center: Offset.zero,
-        width: imgW * fit,
-        height: imgH * fit,
+        width: dw,
+        height: dh,
       ),
       Paint()..filterQuality = FilterQuality.medium,
     );
