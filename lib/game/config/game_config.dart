@@ -80,13 +80,15 @@ class GameConfig {
   static const double scaleExponent = 1.3;
 
   // ---- Entity sizing ----
-  /// Player body width as a fraction of screen width (S8b: raised from
-  /// 0.15 to make the rebuilt sun-head cycle read clearly on-device;
-  /// fairness unchanged — hitbox keeps the same 0.78 grace factor).
-  static const double playerWidthRatio = 0.21;
+  /// Player body width as a fraction of screen width (S10: raised again
+  /// from 0.21 — on-device reads still showed the sun-head cycle small;
+  /// fairness unchanged — hitbox keeps the same 0.78 grace factor and
+  /// the inter-lane clearance still exceeds the summed widths).
+  static const double playerWidthRatio = 0.24;
 
-  /// Obstacle/orb base width as a fraction of screen width.
-  static const double entityWidthRatio = 0.16;
+  /// Obstacle/orb base width as a fraction of screen width (S10: raised
+  /// with the player so entities stay proportional to the hero).
+  static const double entityWidthRatio = 0.19;
 
   /// Hitbox size relative to the visual size (grace margin for fairness).
   static const double hitboxFactor = 0.78;

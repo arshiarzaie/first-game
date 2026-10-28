@@ -25,7 +25,7 @@ class EnergyOrb extends PositionComponent
   Future<void> onLoad() async {
     await super.onLoad();
     anchor = Anchor.center;
-    final width = game.size.x * GameConfig.entityWidthRatio * 0.75;
+    final width = game.size.x * GameConfig.entityWidthRatio * 0.85;
     size = Vector2.all(width);
 
     final factor = GameConfig.hitboxFactor;

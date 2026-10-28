@@ -207,15 +207,17 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
       trackStrip = null;
     }
     try {
-      obstacleSprite =
-          await loadKeyedSprite(GameConfig.obstacleSpriteAsset);
+      // S10: props ship with baked alpha (offline Pillow pipeline) — the
+      // runtime chroma-key path is retired for props after magenta-plate
+      // renders on device. Plain images.load like backdrops/strips.
+      obstacleSprite = await images.load(GameConfig.obstacleSpriteAsset);
     } catch (error) {
       debugPrint('S5 art: obstacle sprite unavailable ($error). '
           'Using canvas placeholder.');
       obstacleSprite = null;
     }
     try {
-      orbSprite = await loadKeyedSprite(GameConfig.orbSpriteAsset);
+      orbSprite = await images.load(GameConfig.orbSpriteAsset);
     } catch (error) {
       debugPrint('S5 art: orb sprite unavailable ($error). '
           'Using canvas placeholder.');

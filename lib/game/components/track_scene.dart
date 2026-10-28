@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -174,60 +175,29 @@ class TrackScene extends PositionComponent
         ),
     );
 
-    // S8b: world-authored perspective track surface strip. The strip is
-    // drawn cover-style inside the trapezoid and scrolled modularly with
-    // travelled distance so the ground itself flows toward the player.
+    // S10: world-authored perspective track surface strip. The strip is
+    // warped into the trapezoid with a triangle mesh whose rows follow
+    // the exact gameplay projection (yForDepth / halfWidthForDepth), so
+    // the painted rails stay on the track edges at every depth, and the
+    // vertical texture coordinate scrolls with travelled distance so the
+    // ground flows toward the player.
     final strip = game.trackStrip;
     if (strip != null) {
-      canvas.save();
-      canvas.clipPath(track);
-      final stripH = strip.height.toDouble();
-      final dstTop = horizonY;
-      final dstH = h - horizonY;
-      final dstRect =
-          Rect.fromLTWH(cx - halfBottom, dstTop, 2 * halfBottom, dstH);
-      // scroll phase: one strip length per one track length
-      final scroll =
-          (game.travelled / GameConfig.trackLength % 1.0) * stripH;
-      if (scroll < 1.0) {
-        canvas.drawImageRect(
-          strip,
-          Rect.fromLTWH(0, 0, strip.width.toDouble(), stripH),
-          dstRect,
-          Paint()..filterQuality = FilterQuality.medium,
-        );
-        canvas.restore();
-        // continue with edges/lanes below
-      } else {
-      final partH = stripH - scroll;
-      // upper tile: tail segment of the source strip near the horizon
-      canvas.drawImageRect(
-        strip,
-        Rect.fromLTWH(0, 0, strip.width.toDouble(), partH),
-        Rect.fromLTWH(dstRect.left, dstRect.top, dstRect.width,
-            dstH * (partH / stripH)),
-        Paint()..filterQuality = FilterQuality.medium,
-      );
-      // lower tile: wrapped head segment flowing toward the player
-      canvas.drawImageRect(
-        strip,
-        Rect.fromLTWH(0, partH, strip.width.toDouble(), scroll),
-        Rect.fromLTWH(dstRect.left, dstRect.top + dstH * (partH / stripH),
-            dstRect.width, dstH * (scroll / stripH)),
-        Paint()..filterQuality = FilterQuality.medium,
-      );
-      canvas.restore();
-      }
+      _renderStripMesh(canvas, strip, cx);
     }
 
-    final edge = Paint()
-      ..color = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawLine(
-        Offset(cx - halfTop, horizonY), Offset(cx - halfBottom, h), edge);
-    canvas.drawLine(
-        Offset(cx + halfTop, horizonY), Offset(cx + halfBottom, h), edge);
+    // Code-drawn rails only when the authored strip is unavailable: the
+    // strip bakes its own rails and drawing both misaligns (S10).
+    if (strip == null) {
+      final edge = Paint()
+        ..color = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawLine(
+          Offset(cx - halfTop, horizonY), Offset(cx - halfBottom, h), edge);
+      canvas.drawLine(
+          Offset(cx + halfTop, horizonY), Offset(cx + halfBottom, h), edge);
+    }
 
     final lanePaint = Paint()
       ..color = Color(GameConfig.trackLaneArgbFor(game.selectedWorld))
@@ -242,22 +212,90 @@ class TrackScene extends PositionComponent
       );
     }
 
-    final stripe = Paint()
-      ..color = Color(GameConfig.trackStripeArgbFor(game.selectedWorld))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-    const stripeCount = 9;
-    final spacing = GameConfig.trackLength / stripeCount;
-    for (var i = 0; i < stripeCount; i++) {
-      final phase = (game.travelled + i * spacing) % GameConfig.trackLength;
-      final depth = 1 - phase / GameConfig.trackLength;
-      final y = game.yForDepth(depth);
-      if (y <= horizonY + 2 || y >= h - 2) {
-        continue;
+    // Flowing depth stripes are the fallback motion cue — the authored
+    // strip already paints its own flow, so they are skipped with it.
+    if (strip == null) {
+      final stripe = Paint()
+        ..color = Color(GameConfig.trackStripeArgbFor(game.selectedWorld))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3;
+      const stripeCount = 9;
+      final spacing = GameConfig.trackLength / stripeCount;
+      for (var i = 0; i < stripeCount; i++) {
+        final phase =
+            (game.travelled + i * spacing) % GameConfig.trackLength;
+        final depth = 1 - phase / GameConfig.trackLength;
+        final y = game.yForDepth(depth);
+        if (y <= horizonY + 2 || y >= h - 2) {
+          continue;
+        }
+        final half = game.halfWidthForDepth(depth) * 0.96;
+        canvas.drawLine(Offset(cx - half, y), Offset(cx + half, y), stripe);
       }
-      final half = game.halfWidthForDepth(depth) * 0.96;
-      canvas.drawLine(Offset(cx - half, y), Offset(cx + half, y), stripe);
     }
+  }
+
+  /// Warps the authored strip into the track trapezoid as a triangle
+  /// mesh (S10). Row t (0 = horizon, 1 = bottom edge) is placed with the
+  /// exact gameplay projection functions so painted rails align with the
+  /// lane geometry at every depth. Texture coordinates address strip
+  /// pixels, one strip length per trackLength cycle, scrolling with
+  /// travelled distance (repeated tiling wraps the phase).
+  void _renderStripMesh(Canvas canvas, Image strip, double cx) {
+    const rows = 16; // vertical segments of the perspective warp
+    final stripW = strip.width.toDouble();
+    final stripH = strip.height.toDouble();
+    final scroll = game.travelled / GameConfig.trackLength;
+
+    final positions = Float32List((rows + 1) * 4);
+    final texs = Float32List((rows + 1) * 4);
+    final indices = <int>[];
+    for (var i = 0; i <= rows; i++) {
+      final t = i / rows; // 0 at the horizon, 1 at the bottom edge
+      final depth = 1 - t;
+      final y = game.yForDepth(depth);
+      final half = game.halfWidthForDepth(depth);
+      // v grows towards the player; a fixed strip feature therefore
+      // slides toward the bottom edge as distance accumulates.
+      final v = (t - scroll) * stripH;
+      final base = i * 4;
+      positions[base] = cx - half;
+      positions[base + 1] = y;
+      positions[base + 2] = cx + half;
+      positions[base + 3] = y;
+      texs[base] = 0;
+      texs[base + 1] = v;
+      texs[base + 2] = stripW;
+      texs[base + 3] = v;
+    }
+    for (var i = 0; i < rows; i++) {
+      final a = 2 * i;
+      final b = a + 1;
+      final c = a + 2;
+      final d = a + 3;
+      indices.addAll([a, b, c, b, d, c]);
+    }
+
+    final vertices = Vertices.raw(
+      VertexMode.triangles,
+      positions,
+      textureCoordinates: texs,
+      indices: Uint16List.fromList(indices),
+    );
+    final paint = Paint()
+      ..shader = ImageShader(
+        strip,
+        TileMode.repeated,
+        TileMode.repeated,
+        Float64List.fromList(const [
+          1.0, 0.0, 0.0, 0.0,
+          0.0, 1.0, 0.0, 0.0,
+          0.0, 0.0, 1.0, 0.0,
+          0.0, 0.0, 0.0, 1.0,
+        ]),
+        filterQuality: FilterQuality.medium,
+      );
+    canvas.drawVertices(vertices, BlendMode.srcOver, paint);
   }
 
   /// Phase 1 placeholder environment (canvas only): night sky gradient,
