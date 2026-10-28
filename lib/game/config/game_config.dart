@@ -80,8 +80,10 @@ class GameConfig {
   static const double scaleExponent = 1.3;
 
   // ---- Entity sizing ----
-  /// Player body width as a fraction of screen width.
-  static const double playerWidthRatio = 0.15;
+  /// Player body width as a fraction of screen width (S8b: raised from
+  /// 0.15 to make the rebuilt sun-head cycle read clearly on-device;
+  /// fairness unchanged — hitbox keeps the same 0.78 grace factor).
+  static const double playerWidthRatio = 0.21;
 
   /// Obstacle/orb base width as a fraction of screen width.
   static const double entityWidthRatio = 0.16;
@@ -114,20 +116,23 @@ class GameConfig {
   static const String emberfallCanyonBackdropKey =
       'worlds/emberfall_canyon/backdrop.png';
 
-  /// Perspective track surface strips (S8b). Null = canvas gradient only
-  /// until that world's strip ships (generated-asset limit this turn;
-  /// Moonveil/Emberfall strips queued next).
+  /// Perspective track surface strips (S8b/S8c) for every world.
   static const String duskHollowTrackStripKey =
       'worlds/dusk_hollow/track_strip.png';
+  static const String moonveilMarshTrackStripKey =
+      'worlds/moonveil_marsh/track_strip.png';
+  static const String emberfallCanyonTrackStripKey =
+      'worlds/emberfall_canyon/track_strip.png';
 
-  /// Track strip per world, or null when the canvas gradient must be used.
+  /// Track strip per world (every world ships one).
   static String? trackStripKeyFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
         return duskHollowTrackStripKey;
       case GameWorld.moonveilMarsh:
+        return moonveilMarshTrackStripKey;
       case GameWorld.emberfallCanyon:
-        return null;
+        return emberfallCanyonTrackStripKey;
     }
   }
 

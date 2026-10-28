@@ -45,6 +45,9 @@ flutter:
     - assets/images/worlds/dusk_hollow/backdrop.png
     # S8b: Dusk Hollow perspective track strip (scrolls along depth).
     - assets/images/worlds/dusk_hollow/track_strip.png
+    # S8c: Moonveil Marsh + Emberfall Canyon perspective track strips.
+    - assets/images/worlds/moonveil_marsh/track_strip.png
+    - assets/images/worlds/emberfall_canyon/track_strip.png
     # S4: playable Moonveil Marsh world backdrop.
     - assets/images/worlds/moonveil_marsh/backdrop.png
     # S7: playable Emberfall Canyon world backdrop.
