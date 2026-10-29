@@ -28,8 +28,26 @@ void main() {
     for (final key in keys) {
       expect(key, isNotNull);
       expect(key, contains('track_strip.png'));
+      expect(key!.startsWith('assets/'), isFalse,
+          reason: 'Flame images.load already prefixes assets/images/');
     }
     expect(keys.toSet().length, equals(GameWorld.values.length));
+  });
+
+  test('corridor pillar and prop keys use Flame-relative paths', () {
+    final pillarKeys =
+        GameWorld.values.map(GameConfig.corridorPillarKeyFor).toList();
+    expect(pillarKeys.toSet().length, equals(GameWorld.values.length));
+    for (final key in [
+      ...pillarKeys,
+      GameConfig.orbSpriteAsset,
+      GameConfig.obstacleSpriteAsset,
+      GameConfig.obstacleArchSpriteAsset,
+      GameConfig.obstacleMonolithSpriteAsset,
+    ]) {
+      expect(key.startsWith('assets/'), isFalse,
+          reason: 'Flame images.load keys must not double-prefix assets/');
+    }
   });
 
   test('every world has a complete opaque-free track palette', () {

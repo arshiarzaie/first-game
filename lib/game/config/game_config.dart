@@ -13,14 +13,15 @@ class GameConfig {
   static const int initialLane = 1;
 
   // ---- Speed / difficulty ----
-  /// Forward speed in world units per second at run start.
-  static const double startSpeed = 240;
+  /// Forward speed in world units per second at run start (S12: raised from
+  /// 240 for brisker Subway-style initial pacing).
+  static const double startSpeed = 310;
 
   /// Hard upper cap for forward speed. Never exceeded.
-  static const double maxSpeed = 640;
+  static const double maxSpeed = 680;
 
   /// Speed gained per second of survival.
-  static const double speedRampPerSecond = 8;
+  static const double speedRampPerSecond = 9.5;
 
   // ---- World geometry ----
   /// Abstract depth length of the track in world units. Entities spawn at
@@ -32,19 +33,19 @@ class GameConfig {
   static const double reactionTimeSeconds = 0.45;
 
   /// Time needed for one lane switch (seconds). Used for fairness spacing.
-  static const double laneSwitchSeconds = 0.15;
+  static const double laneSwitchSeconds = 0.14;
 
   /// Chance (at difficulty 0) that a wave blocks two lanes instead of one.
-  static const double twoLaneBlockBaseChance = 0.25;
+  static const double twoLaneBlockBaseChance = 0.28;
 
   /// Chance (at difficulty 1) that a wave blocks two lanes instead of one.
-  static const double twoLaneBlockMaxChance = 0.65;
+  static const double twoLaneBlockMaxChance = 0.68;
 
-  /// Chance that a wave also spawns an energy orb on a free lane.
-  static const double orbChance = 0.55;
+  /// Chance that a wave also spawns a flowing energy-orb trail on a free lane.
+  static const double orbChance = 0.78;
 
   /// Initial distance before the first wave spawns (lets the run settle in).
-  static const double firstWaveDistance = 700;
+  static const double firstWaveDistance = 420;
 
   // ---- Score ----
   /// Points per world unit travelled.
@@ -101,17 +102,73 @@ class GameConfig {
   /// Hitbox size relative to the visual size (grace margin for fairness).
   static const double hitboxFactor = 0.78;
 
+  // ---- S12: 4-way vertical kinetics & Subway-tier power-ups ----
+  /// Total duration of one full parabolic jump arc (seconds).
+  static const double jumpDurationSeconds = 0.62;
+
+  /// Normalized jump height (0..1) above which low ground spikes are cleared.
+  static const double jumpClearThreshold = 0.28;
+
+  /// Peak jump lift on screen as a fraction of screen height.
+  static const double jumpHeightRatio = 0.18;
+
+  /// Descent speed multiplier when swiping down mid-air (fast-fall slam).
+  static const double fastFallMultiplier = 3.6;
+
+  /// Duration of a ground tuck-slide / roll under overhead arches (seconds).
+  static const double slideDurationSeconds = 0.52;
+
+  /// Active duration of the crash-absorbing Solar Aegis shield (seconds).
+  static const double solarShieldDuration = 8.0;
+
+  /// Recharge cooldown after Solar Aegis expires or absorbs a crash (seconds).
+  static const double solarShieldCooldown = 14.0;
+
+  /// Active duration of the cross-lane Sun Magnet pickup (seconds).
+  static const double magnetDuration = 8.0;
+
+  /// Active duration of the 2x Solar Surge score multiplier pickup (seconds).
+  static const double multiplierDuration = 10.0;
+
+  /// Active duration of the airborne Sunburst Sky-Dash pickup (seconds).
+  static const double solarDashDuration = 4.5;
+
+  /// Forward speed boost factor while Sunburst Sky-Dash is active.
+  static const double solarDashSpeedBoost = 1.55;
+
   // ---- Presentation (P2 visual prototype) ----
   /// Bundle path of the Soul hero sprite. The PNG is rendered on a pure
   /// magenta plate; lib/game/presentation/chroma_key.dart converts that
   /// plate to real alpha at load time and crops to the character.
   static const String soulSpriteAsset = 'assets/images/soul/soul_hero.png';
 
-  /// Bundle paths of the S5 prop sprites (same magenta-plate chroma-key
-  /// pipeline as the Soul art).
-  static const String orbSpriteAsset = 'assets/images/props/energy_orb.png';
-  static const String obstacleSpriteAsset =
-      'assets/images/props/obstacle_spikes.png';
+  /// Flame `images` cache keys for baked-alpha prop sprites (relative to
+  /// `assets/images/` — Flame's default prefix).
+  static const String orbSpriteAsset = 'props/energy_orb.png';
+  static const String obstacleSpriteAsset = 'props/obstacle_spikes.png';
+  static const String obstacleArchSpriteAsset = 'props/obstacle_arch.png';
+  static const String obstacleMonolithSpriteAsset =
+      'props/obstacle_monolith.png';
+
+  /// Roadside 3D corridor lantern pillars per world (relative to `assets/images/`).
+  static const String duskHollowPillarKey =
+      'worlds/dusk_hollow/corridor_pillar.png';
+  static const String moonveilMarshPillarKey =
+      'worlds/moonveil_marsh/corridor_pillar.png';
+  static const String emberfallCanyonPillarKey =
+      'worlds/emberfall_canyon/corridor_pillar.png';
+
+  /// Roadside corridor pillar sprite key per world.
+  static String corridorPillarKeyFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return duskHollowPillarKey;
+      case GameWorld.moonveilMarsh:
+        return moonveilMarshPillarKey;
+      case GameWorld.emberfallCanyon:
+        return emberfallCanyonPillarKey;
+    }
+  }
 
   /// Flame `images` cache key for the Dusk Hollow backdrop (cache paths
   /// are relative to `assets/images/`).

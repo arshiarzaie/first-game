@@ -121,7 +121,236 @@ class TrackScene extends PositionComponent
     } else {
       _renderPlaceholderBackdrop(canvas, w, h);
     }
+    _renderSpeedLines(canvas, w, h);
+    _renderCausewayFlanks(canvas, w, h);
     _renderTrack(canvas, w, h);
+    _renderCorridorPillars(canvas, w, h);
+  }
+
+  /// Kinetic radial wind/light streaks along the outer corridor flanks as
+  /// forward speed climbs or during Sunburst Sky-Dash (S12).
+  void _renderSpeedLines(Canvas canvas, double w, double h) {
+    if (!game.isRunStarted) {
+      return;
+    }
+    final intensity = game.powerUps.isSolarDashing
+        ? 1.0
+        : ((game.difficulty.levelAt(game.elapsedSeconds) - 0.12) / 0.88)
+            .clamp(0.0, 0.75);
+    if (intensity <= 0.02) {
+      return;
+    }
+    final horizonY = game.horizonY;
+    final cx = w / 2;
+    final color = game.powerUps.isSolarDashing
+        ? const Color(0xFFFFD54F)
+        : Color(GameConfig.trackEdgeArgbFor(game.selectedWorld));
+    final paint = Paint()
+      ..strokeWidth = game.powerUps.isSolarDashing ? 2.4 : 1.5
+      ..strokeCap = StrokeCap.round
+      ..blendMode = BlendMode.plus;
+
+    const streakCount = 8;
+    final phaseBase = game.travelled / GameConfig.trackLength * 1.9;
+    for (var i = 0; i < streakCount; i++) {
+      final side = i.isEven ? -1.0 : 1.0;
+      final t = (phaseBase + i * 0.137) % 1.0;
+      final r0 = 0.26 + t * 0.56;
+      final r1 = (r0 + 0.14).clamp(0.0, 1.05);
+      final spreadY = 0.08 + (i % 4) * 0.16;
+      final p0 = Offset(
+        cx + side * w * 0.54 * r0,
+        horizonY + (h - horizonY) * spreadY * r0,
+      );
+      final p1 = Offset(
+        cx + side * w * 0.54 * r1,
+        horizonY + (h - horizonY) * spreadY * r1,
+      );
+      final fade = math.sin(t * math.pi) * intensity * 0.42;
+      paint.color = color.withValues(alpha: fade.clamp(0.0, 1.0));
+      canvas.drawLine(p0, p1, paint);
+    }
+  }
+
+  /// 3D stone viaduct side-walls dropping outward from both edges of the
+  /// track, with perspective masonry ribs scrolling in 1:1 lockstep with
+  /// the track bricks so the causeway reads as a solid elevated structure
+  /// moving through the valley (S12).
+  void _renderCausewayFlanks(Canvas canvas, double w, double h) {
+    final horizonY = game.horizonY;
+    if (h <= horizonY) {
+      return;
+    }
+    final spanToPlayer = math.max(1.0, game.playerPlaneY - horizonY);
+    final aMax = (h - horizonY) / spanToPlayer;
+    final cx = w / 2;
+    final halfTop = game.halfWidthForDepth(1);
+    final halfPlayer = game.halfWidthForDepth(0);
+    final halfBottom = halfTop + (halfPlayer - halfTop) * aMax;
+
+    final wallTop = w * 0.018;
+    final wallBottom = w * 0.14;
+    final baseFill = Color(GameConfig.trackFillArgbFor(game.selectedWorld));
+
+    for (final side in const [-1.0, 1.0]) {
+      final wall = Path()
+        ..moveTo(cx + side * halfTop, horizonY)
+        ..lineTo(cx + side * (halfTop + wallTop), horizonY + 8)
+        ..lineTo(cx + side * (halfBottom + wallBottom), h)
+        ..lineTo(cx + side * halfBottom, h)
+        ..close();
+      canvas.drawPath(
+        wall,
+        Paint()
+          ..shader = Gradient.linear(
+            Offset(cx, horizonY),
+            Offset(cx, h),
+            [
+              baseFill.withValues(alpha: 0.0),
+              baseFill.withValues(alpha: 0.78),
+            ],
+          ),
+      );
+    }
+
+    // Scrolling stone buttress ribs along both viaduct walls (same u^2
+    // foreshortening as the track strip -> zero relative slip).
+    final ribPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    final edgeColor = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld));
+    const ribStep = 0.12;
+    final phase = (game.travelled / GameConfig.trackLength) % ribStep;
+    for (var k = 0; k < 10; k++) {
+      final u = phase + k * ribStep;
+      if (u <= 0.06) {
+        continue;
+      }
+      final a = math.pow(u, GameConfig.perspectiveExponent).toDouble();
+      final y = horizonY + spanToPlayer * a;
+      if (y > h + 40) {
+        continue;
+      }
+      final half = halfTop + (halfPlayer - halfTop) * a;
+      final wallW = wallTop + (wallBottom - wallTop) * (a / math.max(1.0, aMax));
+      final fade = ((u - 0.06) / 0.22).clamp(0.0, 1.0) * 0.36;
+      ribPaint.color = edgeColor.withValues(alpha: fade);
+      canvas.drawLine(
+        Offset(cx - half, y),
+        Offset(cx - half - wallW, y + wallW * 0.55),
+        ribPaint,
+      );
+      canvas.drawLine(
+        Offset(cx + half, y),
+        Offset(cx + half + wallW, y + wallW * 0.55),
+        ribPaint,
+      );
+    }
+  }
+
+  /// Streams 5 symmetric pairs of world-authored stone lantern pillars
+  /// down both outer flanks of the viaduct at exact 2.5D world speed so
+  /// environment and track advance together like Subway Surfers (S12).
+  void _renderCorridorPillars(Canvas canvas, double w, double h) {
+    final horizonY = game.horizonY;
+    if (h <= horizonY) {
+      return;
+    }
+    final spanToPlayer = math.max(1.0, game.playerPlaneY - horizonY);
+    final cx = w / 2;
+    final halfTop = game.halfWidthForDepth(1);
+    final halfPlayer = game.halfWidthForDepth(0);
+    final pillar = game.corridorPillar;
+
+    const pairCount = 5;
+    const cycleSpan = 1.22;
+    const step = cycleSpan / pairCount;
+    final phase = (game.travelled / GameConfig.trackLength) % step;
+
+    for (var k = 0; k < pairCount; k++) {
+      final u = phase + k * step;
+      if (u < 0.035) {
+        continue;
+      }
+      final a = math.pow(u, GameConfig.perspectiveExponent).toDouble();
+      final yBase = horizonY + spanToPlayer * a;
+      final half = halfTop + (halfPlayer - halfTop) * a;
+      final sc = GameConfig.farScale +
+          (1 - GameConfig.farScale) *
+              math.pow(u, GameConfig.scaleExponent).toDouble();
+      final alpha = ((u - 0.035) / 0.16).clamp(0.0, 1.0);
+
+      final pillarH = w * 0.34 * sc;
+      final aspect =
+          pillar != null ? pillar.width / pillar.height : 0.44;
+      final pillarW = pillarH * aspect;
+      final flankOffset = half + pillarW * 0.44;
+
+      for (final side in const [-1.0, 1.0]) {
+        final footX = cx + side * flankOffset;
+        final footY = yBase + pillarH * 0.05;
+        if (footX + pillarW < -20 || footX - pillarW > w + 20) {
+          continue;
+        }
+
+        // Contact shadow on the viaduct parapet ledge.
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(footX, footY - pillarH * 0.03),
+            width: pillarW * 0.92,
+            height: pillarW * 0.28,
+          ),
+          Paint()
+            ..color = const Color(0xFF0A0416).withValues(alpha: 0.55 * alpha)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        );
+
+        if (pillar != null) {
+          canvas.save();
+          canvas.translate(footX, footY);
+          // Mirror right-flank pillar so both lantern faces angle inward.
+          if (side > 0) {
+            canvas.scale(-1, 1);
+          }
+          canvas.drawImageRect(
+            pillar,
+            Rect.fromLTWH(
+                0, 0, pillar.width.toDouble(), pillar.height.toDouble()),
+            Rect.fromLTWH(-pillarW / 2, -pillarH, pillarW, pillarH),
+            Paint()
+              ..color = Color.fromARGB((alpha * 255).round(), 255, 255, 255)
+              ..filterQuality = FilterQuality.medium,
+          );
+          canvas.restore();
+        } else {
+          // Lightweight canvas fallback when asset bundle is absent in tests.
+          final rect = Rect.fromLTWH(
+            footX - pillarW * 0.32,
+            footY - pillarH * 0.92,
+            pillarW * 0.64,
+            pillarH * 0.92,
+          );
+          canvas.drawRect(
+            rect,
+            Paint()
+              ..color =
+                  const Color(0xFF281A42).withValues(alpha: 0.85 * alpha),
+          );
+        }
+
+        // Warm breathing lantern aura at the pillar crown.
+        final lanternPulse =
+            0.88 + 0.12 * math.sin(game.elapsedSeconds * 3.8 + k);
+        canvas.drawCircle(
+          Offset(footX, footY - pillarH * 0.72),
+          pillarW * 0.58 * lanternPulse,
+          Paint()
+            ..color =
+                const Color(0xFFFFC857).withValues(alpha: 0.26 * alpha)
+            ..blendMode = BlendMode.plus,
+        );
+      }
+    }
   }
 
   /// Cover-fits the selected world's matte painting so the whole screen

@@ -48,14 +48,19 @@ flutter:
     # S8c: Moonveil Marsh + Emberfall Canyon perspective track strips.
     - assets/images/worlds/moonveil_marsh/track_strip.png
     - assets/images/worlds/emberfall_canyon/track_strip.png
+    # S12: world-authored roadside corridor pillars (baked RGBA alpha).
+    - assets/images/worlds/dusk_hollow/corridor_pillar.png
+    - assets/images/worlds/moonveil_marsh/corridor_pillar.png
+    - assets/images/worlds/emberfall_canyon/corridor_pillar.png
     # S4: playable Moonveil Marsh world backdrop.
     - assets/images/worlds/moonveil_marsh/backdrop.png
     # S7: playable Emberfall Canyon world backdrop.
     - assets/images/worlds/emberfall_canyon/backdrop.png
-    # S5: pre-rendered prop sprites on magenta plates (chroma-keyed at
-    # load by lib/game/presentation/chroma_key.dart, like the Soul art).
+    # S5/S12: pre-rendered prop sprites (baked RGBA alpha).
     - assets/images/props/energy_orb.png
     - assets/images/props/obstacle_spikes.png
+    - assets/images/props/obstacle_arch.png
+    - assets/images/props/obstacle_monolith.png
     # S1 UI shell: cinematic title key art (approved concept board identity).
     # S3: + world-card art for the world select screen (directory include).
     - assets/images/ui/

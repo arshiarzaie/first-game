@@ -1,33 +1,29 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
-/// The Soul — the game's central character. P2 visual slice: renders the
-/// production hero sprite (pre-rendered stylized 3D-cartoon sun loaded on
-/// the game; magenta plate keyed to real alpha at load time) with light
-/// idle bob and lane-switch lean. When the sprite is unavailable it falls
-/// back to the original canvas placeholder so the character is never
-/// invisible (notably in test environments without bundled assets).
-///
-/// Lane movement, hitbox and seat/size math are unchanged from Phase 1 —
-/// only the presentation layer is re-skinned.
+/// The Soul — golden humanoid sun hero (S12: supports 4-way Subway-tier
+/// lane glide, parabolic jump lift with grounded floor shadow, aerodynamic
+/// tuck-slide with floor sparks, Solar Aegis crash shield aura, and
+/// airborne Sunburst Sky-Dash comet trail).
 class SoulPlayer extends PositionComponent
-    with CollisionCallbacks, HasGameReference<SoulDuskRunGame> {
+    with HasGameReference<SoulDuskRunGame> {
   SoulPlayer() : super(priority: 20);
 
   /// Continuous lane position; fractional while switching lanes.
   double _laneX = GameConfig.initialLane.toDouble();
 
-  /// Idle-animation clock (seconds).
+  /// Animation clock (seconds).
   double _elapsed = 0;
 
   /// Remaining lane slide (-1..1) — drives lean and stretch.
   double _lean = 0;
+
+  double get currentLane => _laneX;
 
   @override
   Future<void> onLoad() async {
@@ -37,15 +33,6 @@ class SoulPlayer extends PositionComponent
     size = Vector2(width, width * 0.92);
     _laneX = game.laneSystem.lane.toDouble();
     position = Vector2(game.laneXOnPlayerPlane(_laneX), game.playerPlaneY);
-
-    // Grace-margin hitbox: smaller than the visual so collisions feel fair.
-    final factor = GameConfig.hitboxFactor;
-    add(RectangleHitbox(
-      size: Vector2(size.x * factor, size.y * factor),
-      position:
-          Vector2(size.x * (1 - factor) / 2, size.y * (1 - factor) / 2),
-      collisionType: CollisionType.active,
-    ));
   }
 
   @override
@@ -54,7 +41,6 @@ class SoulPlayer extends PositionComponent
     _elapsed += dt;
     final target = game.laneSystem.lane.toDouble();
     if (target != _laneX) {
-      // Linear slide completing one lane change in laneSwitchSeconds.
       final maxDelta = dt / GameConfig.laneSwitchSeconds;
       final delta = (target - _laneX).clamp(-maxDelta, maxDelta).toDouble();
       _laneX += delta;
@@ -74,12 +60,19 @@ class SoulPlayer extends PositionComponent
     super.render(canvas);
     final frames = game.runFrames;
     if (frames.isNotEmpty) {
-      // P4 start behavior: before the first tap Soul stands still on one
-      // static pose frame (weight-down = upright, both feet planted);
-      // the running cycle only plays after the run starts.
-      final index = game.isRunStarted
-          ? (_elapsed * GameConfig.runCycleFps).floor() % frames.length
-          : GameConfig.runIdleFrame;
+      final int index;
+      if (!game.isRunStarted) {
+        index = GameConfig.runIdleFrame;
+      } else if (game.verticalMotion.isJumping ||
+          game.powerUps.isSolarDashing) {
+        // Hold dynamic airborne stride pose while vaulting or sky-dashing.
+        index = 0;
+      } else if (game.verticalMotion.isSliding) {
+        // Compact tucked pose during a ground slide.
+        index = 4 % frames.length;
+      } else {
+        index = (_elapsed * GameConfig.runCycleFps).floor() % frames.length;
+      }
       _renderFrame(canvas, frames[index]);
       return;
     }
@@ -91,17 +84,11 @@ class SoulPlayer extends PositionComponent
     _renderSprite(canvas, sprite);
   }
 
-  /// P3B production render: the approved 8-frame run cycle (pre-keyed
-  /// RGBA, 12 fps). Lane-switch lean/squash are kept; the sine idle-bob
-  /// is intentionally absent — the frames carry their own bounce and
-  /// stride, so the character's position stays stable across the loop.
   void _renderFrame(Canvas canvas, Image frame) {
     final w = size.x;
     final h = size.y;
     final imgW = frame.width.toDouble();
     final imgH = frame.height.toDouble();
-    // Frames hold ~53% content inside a 512×512 plate; the fit boost
-    // normalizes the drawn silhouette to the established hero size.
     final fit = math.min(
       (w * 1.30 * GameConfig.runCycleFitBoost) / imgW,
       (h * 1.30 * GameConfig.runCycleFitBoost) / imgH,
@@ -109,68 +96,154 @@ class SoulPlayer extends PositionComponent
     final dw = imgW * fit;
     final dh = imgH * fit;
 
-    // Ground aura + contact shadow planted on the stone surface beneath
-    // Soul's feet (unrotated so the floor plane stays horizontal during
-    // lane-switch leans).
-    final footCenter = Offset(w / 2, h / 2 + dh * 0.36);
+    final elev = game.effectivePlayerElevation;
+    final jumpLiftPx = elev * game.size.y * GameConfig.jumpHeightRatio;
+    final sliding =
+        game.verticalMotion.isSliding && !game.powerUps.isSolarDashing;
+    final slideDropPx = sliding ? dh * 0.14 : 0.0;
+
+    // 1. Grounded floor aura + contact shadow stay on the stone track even
+    // while Soul leaps high into the air, shrinking with height for crisp
+    // 3D altitude readability.
+    final shadowScale = (1.0 - elev * 0.45).clamp(0.45, 1.0);
+    final footFloorY = h / 2 + dh * 0.37;
     canvas.drawOval(
       Rect.fromCenter(
-        center: footCenter,
-        width: dw * 0.62,
-        height: dh * 0.15,
+        center: Offset(w / 2, footFloorY),
+        width: dw * 0.64 * shadowScale,
+        height: dh * 0.15 * shadowScale,
       ),
       Paint()
-        ..color = const Color(0x40FFB830)
+        ..color = const Color(0x42FFB830)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(w / 2, h / 2 + dh * 0.37),
-        width: dw * 0.38,
-        height: dh * 0.09,
+        center: Offset(w / 2, footFloorY + 2),
+        width: dw * 0.40 * shadowScale,
+        height: dh * 0.09 * shadowScale,
       ),
       Paint()
-        ..color = const Color(0x8810061E)
+        ..color = const Color(0x9010061E)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
     );
 
+    final bodyCenterY = h / 2 - jumpLiftPx + slideDropPx;
+
+    // 2. Sunburst Sky-Dash comet tail when flying above the track.
+    if (game.powerUps.isSolarDashing) {
+      final tail = Path()
+        ..moveTo(w / 2 - dw * 0.24, bodyCenterY + dh * 0.10)
+        ..lineTo(w / 2 + dw * 0.24, bodyCenterY + dh * 0.10)
+        ..lineTo(w / 2, bodyCenterY + dh * 0.85)
+        ..close();
+      canvas.drawPath(
+        tail,
+        Paint()
+          ..color = const Color(0x88FFB300)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+          ..blendMode = BlendMode.plus,
+      );
+    }
+
+    // 3. Slide friction sparks on the stone masonry.
+    if (sliding) {
+      final sparkPaint = Paint()
+        ..color = const Color(0xCCFFE082)
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round
+        ..blendMode = BlendMode.plus;
+      for (var i = -1; i <= 1; i += 2) {
+        final sx = w / 2 + i * dw * 0.22;
+        final jitter = math.sin(_elapsed * 38 + i) * 5;
+        canvas.drawLine(
+          Offset(sx, footFloorY - 2),
+          Offset(sx + i * (14 + jitter.abs()), footFloorY + 8),
+          sparkPaint,
+        );
+      }
+    }
+
+    // 4. Character body with jump stretch / slide tuck / lane lean.
     canvas.save();
-    canvas.translate(w / 2, h / 2);
-    canvas.rotate(_lean * GameConfig.playerLeanAngle);
-    canvas.scale(1 + _lean.abs() * 0.08, 1 - _lean.abs() * 0.06);
+    canvas.translate(w / 2, bodyCenterY);
+    final slideTilt = sliding ? -0.10 : 0.0;
+    canvas.rotate(_lean * GameConfig.playerLeanAngle + slideTilt);
+    final sx = sliding
+        ? 1.15
+        : (1 + _lean.abs() * 0.08 - elev * 0.04);
+    final sy = sliding
+        ? 0.68
+        : (1 - _lean.abs() * 0.06 + elev * 0.07);
+    canvas.scale(sx, sy);
 
     canvas.drawImageRect(
       frame,
       Rect.fromLTWH(0, 0, imgW, imgH),
-      Rect.fromCenter(
-        center: Offset.zero,
-        width: dw,
-        height: dh,
-      ),
+      Rect.fromCenter(center: Offset.zero, width: dw, height: dh),
       Paint()..filterQuality = FilterQuality.medium,
     );
     canvas.restore();
+
+    // 5. Solar Aegis crash-shield barrier ring + sun-magnet halo.
+    if (game.powerUps.hasShield) {
+      final pulse = 1 + math.sin(_elapsed * 7) * 0.04;
+      final shieldRadius = dw * 0.48 * pulse;
+      final center = Offset(w / 2, bodyCenterY);
+      canvas.drawCircle(
+        center,
+        shieldRadius,
+        Paint()
+          ..color = const Color(0x28FFD54F)
+          ..blendMode = BlendMode.plus,
+      );
+      canvas.drawCircle(
+        center,
+        shieldRadius,
+        Paint()
+          ..color = const Color(0xCCFFE082)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.0
+          ..blendMode = BlendMode.plus,
+      );
+      canvas.drawCircle(
+        center,
+        shieldRadius * 1.08,
+        Paint()
+          ..color = const Color(0x884DD8FF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.6
+          ..blendMode = BlendMode.plus,
+      );
+    } else if (game.powerUps.hasMagnet) {
+      final pulse = 1 + math.sin(_elapsed * 9) * 0.06;
+      canvas.drawCircle(
+        Offset(w / 2, bodyCenterY),
+        dw * 0.44 * pulse,
+        Paint()
+          ..color = const Color(0x774DD8FF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0
+          ..blendMode = BlendMode.plus,
+      );
+    }
   }
 
-  /// Production render: keyed sprite, gentle idle bob, roll + squash while
-  /// sliding lanes. All motion is decorative — hitbox stays fixed.
   void _renderSprite(Canvas canvas, Image sprite) {
     final w = size.x;
     final h = size.y;
+    final elev = game.effectivePlayerElevation;
+    final jumpLiftPx = elev * game.size.y * GameConfig.jumpHeightRatio;
     final bob =
         math.sin(_elapsed * 2 * math.pi * 1.6) * h * GameConfig.playerBobRatio;
 
     canvas.save();
-    canvas.translate(w / 2, h / 2 + bob);
+    canvas.translate(w / 2, h / 2 + bob - jumpLiftPx);
     canvas.rotate(_lean * GameConfig.playerLeanAngle);
-    // Light stretch in glide direction, slight squash vertically.
     canvas.scale(1 + _lean.abs() * 0.08, 1 - _lean.abs() * 0.06);
 
     final imgW = sprite.width.toDouble();
     final imgH = sprite.height.toDouble();
-    // Contain-fit into a slightly enlarged box: the cropped sprite's own
-    // bounding box includes the ray tips, so scale up a touch to keep the
-    // body mass comparable to the Phase 1 silhouette.
     final boxW = w * 1.30;
     final boxH = h * 1.30;
     final fit = math.min(boxW / imgW, boxH / imgH);
@@ -187,15 +260,14 @@ class SoulPlayer extends PositionComponent
     canvas.restore();
   }
 
-  /// Canvas placeholder (Phase 1 greybox): golden sun with rays and a
-  /// friendly face. Kept as the no-asset fallback.
   void _renderPlaceholder(Canvas canvas) {
     final w = size.x;
     final h = size.y;
-    final center = Offset(w / 2, h / 2);
+    final elev = game.effectivePlayerElevation;
+    final jumpLiftPx = elev * game.size.y * GameConfig.jumpHeightRatio;
+    final center = Offset(w / 2, h / 2 - jumpLiftPx);
     final radius = w * 0.40;
 
-    // --- rays ---
     final rayPaint = Paint()..color = const Color(0xFFFF9F68);
     for (var i = 0; i < 8; i++) {
       final angle = i * math.pi / 4 + math.pi / 8;
@@ -211,44 +283,11 @@ class SoulPlayer extends PositionComponent
       canvas.drawPath(ray, rayPaint);
     }
 
-    // --- body ---
     canvas.drawCircle(center, radius, Paint()..color = const Color(0xFFFFD166));
-
-    // --- soft top-left highlight ---
     canvas.drawCircle(
       center - Offset(w * 0.05, h * 0.08),
       radius * 0.6,
       Paint()..color = const Color(0x2EFFFFFF),
     );
-
-    // --- eyes ---
-    final eyePaint = Paint()..color = const Color(0xFF3A2A28);
-    final eyeY = center.dy - radius * 0.12;
-    final eyeDx = radius * 0.42;
-    final eyeR = w * 0.065;
-    final glint = Paint()..color = const Color(0xFFFFFFFF);
-    canvas.drawCircle(Offset(center.dx - eyeDx, eyeY), eyeR, eyePaint);
-    canvas.drawCircle(Offset(center.dx + eyeDx, eyeY), eyeR, eyePaint);
-    canvas.drawCircle(
-        Offset(center.dx - eyeDx + eyeR * 0.35, eyeY - eyeR * 0.35),
-        eyeR * 0.32,
-        glint);
-    canvas.drawCircle(
-        Offset(center.dx + eyeDx + eyeR * 0.35, eyeY - eyeR * 0.35),
-        eyeR * 0.32,
-        glint);
-
-    // --- smile ---
-    final smileRect = Rect.fromCenter(
-      center: center + Offset(0, radius * 0.28),
-      width: radius * 0.9,
-      height: radius * 0.55,
-    );
-    final smilePaint = Paint()
-      ..color = const Color(0xFF3A2A28)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.035
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(smileRect, math.pi * 0.15, math.pi * 0.7, false, smilePaint);
   }
 }

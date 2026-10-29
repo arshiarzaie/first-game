@@ -5,35 +5,35 @@ import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/painting.dart';
 
 import 'components/energy_orb.dart';
 import 'components/obstacle.dart';
+import 'components/power_up_pickup.dart';
 import 'components/soul_player.dart';
 import 'components/track_scene.dart';
+import 'components/vfx_burst.dart';
 import 'config/game_config.dart';
 import 'presentation/chroma_key.dart';
 import 'systems/difficulty_manager.dart';
 import 'systems/lane_system.dart';
 import 'systems/obstacle_spawner.dart';
+import 'systems/power_up_system.dart';
 import 'systems/progress_store.dart';
 import 'systems/score_manager.dart';
+import 'systems/vertical_motion.dart';
 
-/// Flame game root for SOUL: DUSK RUN (Phase 1 greybox).
+/// Flame game root for SOUL: DUSK RUN (S12 Subway-tier runner).
 ///
-/// Owns the run state (elapsed time, travelled distance, score), spawns fair
-/// obstacle waves from a seeded generator, projects world depth to screen
-/// space (the 2.5D illusion), and bridges to Flutter overlays for Game Over
-/// and Pause. The player runs in place; the world moves towards them.
-class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
+/// Owns run state, 4-way movement (lane switch + parabolic jump + tuck-slide
+/// + mid-air fast-fall), seeded multi-archetype obstacle waves, flowing
+/// sun-orb trails & jump arcs, Subway-style power-ups + Solar Aegis crash
+/// shield, and shared 2.5D world-to-screen projection.
+class SoulDuskRunGame extends FlameGame {
   SoulDuskRunGame({int seed = 0, this.selectedWorld = GameWorld.duskHollow})
       : _seed = seed;
 
-  /// The selected world (S4): selects backdrop asset, painted-horizon
-  /// anchor and track palette. Gameplay numbers are world-agnostic.
   final GameWorld selectedWorld;
 
-  /// Overlay identifiers used in the GameWidget's overlayBuilderMap.
   static const String gameOverOverlayId = 'gameOver';
   static const String pauseOverlayId = 'pauseMenu';
 
@@ -41,83 +41,85 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
 
   // Pure-Dart gameplay systems (unit-tested in isolation).
   final LaneSystem laneSystem = LaneSystem();
+  final VerticalMotion verticalMotion = VerticalMotion();
+  final PowerUpSystem powerUps = PowerUpSystem();
   final DifficultyManager difficulty = const DifficultyManager();
   final ScoreManager score = ScoreManager();
 
+  /// Notifies the Flutter HUD layer whenever score, orbs, run-start, or
+  /// power-up timers update.
+  final ValueNotifier<int> hudTick = ValueNotifier<int>(0);
+
   late SeededObstacleGenerator _generator;
   late final SoulPlayer player;
-  late final TextComponent _hudText;
 
-  // P2 visual slice: pre-rendered production art, decoded once at load.
-  // Either may remain null (e.g. asset missing in a test environment);
-  // components fall back to their canvas placeholders so the scene never
-  // renders blank.
+  // Pre-decoded production art assets (null until loaded; components render
+  // crisp canvas fallbacks whenever an asset is unavailable).
   ui.Image? soulSprite;
-  /// Decoded backdrop of the selected world (null until preloaded /
-  /// when the asset is unavailable — TrackScene falls back to canvas).
   ui.Image? worldBackdrop;
-
-  /// Decoded S5 prop sprites (null until preloaded / on failure the
-  /// components keep their approved canvas placeholder rendering).
+  ui.Image? trackStrip;
+  ui.Image? corridorPillar;
   ui.Image? orbSprite;
   ui.Image? obstacleSprite;
-
-  /// Decoded S8b perspective track surface strip for the selected world
-  /// (null until preloaded / null when the world has no strip yet —
-  /// TrackScene keeps its canvas gradient in that case).
-  ui.Image? trackStrip;
-
-  // P3B: approved 8-frame run cycle (pre-keyed RGBA plates). Empty when
-  // frames could not be decoded — the player then falls back to the
-  // single hero sprite, then to the canvas placeholder.
+  ui.Image? obstacleArchSprite;
+  ui.Image? obstacleMonolithSprite;
   List<ui.Image> runFrames = const [];
 
   double _elapsedSeconds = 0;
   double _travelled = 0;
   double _distanceSinceWave = 0;
   double _distanceToNextWave = GameConfig.firstWaveDistance;
+  double _dashOrbTimer = 0;
+  double _hudNotifyTimer = 0;
   bool _ended = false;
   int _runNumber = 0;
-
-  /// P4 start gate: the scene is alive with Soul standing still until the
-  /// player's first tap. Time, score, spawning and difficulty must NOT
-  /// advance while awaiting the first input (mandatory start behavior).
   bool _runStarted = false;
+
+  ProgressStore? _progress;
 
   double get elapsedSeconds => _elapsedSeconds;
   double get travelled => _travelled;
   bool get isEnded => _ended;
   bool get isRunStarted => _runStarted;
-  double get currentSpeed =>
-      _runStarted ? difficulty.speedAt(_elapsedSeconds) : 0;
+
+  double get currentSpeed {
+    if (!_runStarted) {
+      return 0;
+    }
+    final base = difficulty.speedAt(_elapsedSeconds);
+    return powerUps.isSolarDashing
+        ? base * GameConfig.solarDashSpeedBoost
+        : base;
+  }
+
+  /// Normalized vertical elevation of Soul in `[0, 1]` (accounts for both
+  /// jumps and airborne Sunburst Sky-Dash).
+  double get effectivePlayerElevation =>
+      powerUps.isSolarDashing ? 0.92 : verticalMotion.jumpHeight;
 
   // ---------------------------------------------------------------
   // 2.5D projection helpers (shared by the scene and all entities).
-  // Depth 1 = horizon, depth 0 = player plane.
+  // Depth 1 = horizon, depth 0 = player plane, depth < 0 = foreground
+  // passing the camera towards the bottom screen edge.
   // ---------------------------------------------------------------
 
   double get horizonY => size.y * GameConfig.horizonRatio;
   double get playerPlaneY => size.y * GameConfig.playerPlaneRatio;
 
-  /// Eased approach factor: 0 at the horizon, 1 at the player plane.
   double _approach(double depth) {
-    final linear = (1.0 - depth).clamp(0.0, 1.0).toDouble();
+    final linear = (1.0 - depth).clamp(0.0, 1.35).toDouble();
     return math.pow(linear, GameConfig.perspectiveExponent).toDouble();
   }
 
-  /// Screen-space Y for a world depth.
   double yForDepth(double depth) =>
       horizonY + (playerPlaneY - horizonY) * _approach(depth);
 
-  /// Track half-width in px at a depth.
   double halfWidthForDepth(double depth) {
     final top = size.x * GameConfig.trackTopHalfWidthRatio;
     final bottom = size.x * GameConfig.trackBottomHalfWidthRatio;
     return top + (bottom - top) * _approach(depth);
   }
 
-  /// Screen-space X of a lane center at a depth. [lane] may be fractional
-  /// during lane switches.
   double laneXForDepth(double lane, double depth) {
     final center = (GameConfig.laneCount - 1) / 2;
     final offset = lane - center;
@@ -125,114 +127,79 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
         offset * halfWidthForDepth(depth) * GameConfig.laneSpreadRatio;
   }
 
-  /// Lane-center X on the player plane (used by the player itself).
   double laneXOnPlayerPlane(double lane) => laneXForDepth(lane, 0);
 
-  /// Visual scale for entities at a depth (gentler easing than the
-  /// vertical motion so far objects don't shrink too aggressively).
   double scaleForDepth(double depth) {
-    final linear = (1.0 - depth).clamp(0.0, 1.0).toDouble();
+    final linear = (1.0 - depth).clamp(0.0, 1.35).toDouble();
     final eased = math.pow(linear, GameConfig.scaleExponent).toDouble();
     return GameConfig.farScale + (1 - GameConfig.farScale) * eased;
   }
 
   // --------------------------------------------------------------- lifecycle
 
-  /// Banked sun progress (S8); loaded lazily so persistence issues can
-  /// never block the scene from appearing.
-  ProgressStore? _progress;
-
   @override
   Future<void> onLoad() async {
     await super.onLoad();
     _generator = SeededObstacleGenerator(seed: _seed);
     unawaited(ProgressStore.load().then((store) => _progress = store));
-
-    // Components attach immediately so the scene is interactive at once;
-    // production art decodes in the background and the components pick it
-    // up on a later frame (they re-check the game fields every render).
     unawaited(_preloadArt());
 
     add(TrackScene());
     player = SoulPlayer();
     add(player);
-
-    _hudText = TextComponent(
-      text: _hudString,
-      textRenderer: TextPaint(
-        style: const TextStyle(
-          color: Color(0xFFF6E7C8),
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-          shadows: [
-            Shadow(
-              color: Color(0xB3000000),
-              blurRadius: 8,
-              offset: Offset(0, 1),
-            ),
-          ],
-        ),
-      ),
-      position: Vector2(16, 48),
-      priority: 1000,
-    );
-    add(_hudText);
   }
 
-  /// Background decode of the P2 slice art. Fields stay null until
-  /// decoded; any failure leaves the Canvas placeholders active.
-  Future<void> _preloadArt() async {
+  Future<ui.Image?> _tryLoadImage(String key, String label) async {
     try {
-      worldBackdrop =
-          await images.load(GameConfig.backdropKeyFor(selectedWorld));
+      return await images.load(key);
     } catch (error) {
-      debugPrint('P2 art: world backdrop unavailable ($error). '
-          'Using canvas placeholder.');
-      worldBackdrop = null;
+      debugPrint('$label unavailable ($error). Using canvas fallback.');
+      return null;
     }
+  }
+
+  Future<void> _preloadArt() async {
+    worldBackdrop = await _tryLoadImage(
+      GameConfig.backdropKeyFor(selectedWorld),
+      'World backdrop',
+    );
     try {
       soulSprite = await loadKeyedSprite(GameConfig.soulSpriteAsset);
     } catch (error) {
-      debugPrint('P2 art: Soul sprite unavailable ($error). '
-          'Using canvas placeholder.');
+      debugPrint('Soul sprite unavailable ($error). Using fallback.');
       soulSprite = null;
     }
-    try {
-      final trackKey = GameConfig.trackStripKeyFor(selectedWorld);
-      trackStrip = trackKey == null ? null : await images.load(trackKey);
-    } catch (error) {
-      debugPrint('S8b art: track strip unavailable ($error). '
-          'Using canvas gradient.');
-      trackStrip = null;
-    }
-    try {
-      // S10: props ship with baked alpha (offline Pillow pipeline) — the
-      // runtime chroma-key path is retired for props after magenta-plate
-      // renders on device. Plain images.load like backdrops/strips.
-      obstacleSprite = await images.load(GameConfig.obstacleSpriteAsset);
-    } catch (error) {
-      debugPrint('S5 art: obstacle sprite unavailable ($error). '
-          'Using canvas placeholder.');
-      obstacleSprite = null;
-    }
-    try {
-      orbSprite = await images.load(GameConfig.orbSpriteAsset);
-    } catch (error) {
-      debugPrint('S5 art: orb sprite unavailable ($error). '
-          'Using canvas placeholder.');
-      orbSprite = null;
-    }
+    final trackKey = GameConfig.trackStripKeyFor(selectedWorld);
+    trackStrip = trackKey == null
+        ? null
+        : await _tryLoadImage(trackKey, 'Track strip');
+    corridorPillar = await _tryLoadImage(
+      GameConfig.corridorPillarKeyFor(selectedWorld),
+      'Corridor pillar',
+    );
+    obstacleSprite =
+        await _tryLoadImage(GameConfig.obstacleSpriteAsset, 'Low spikes');
+    obstacleArchSprite = await _tryLoadImage(
+      GameConfig.obstacleArchSpriteAsset,
+      'High arch obstacle',
+    );
+    obstacleMonolithSprite = await _tryLoadImage(
+      GameConfig.obstacleMonolithSpriteAsset,
+      'Tall monolith obstacle',
+    );
+    orbSprite = await _tryLoadImage(GameConfig.orbSpriteAsset, 'Energy orb');
+
     try {
       final loaded = <ui.Image>[];
       for (var i = 1; i <= GameConfig.runFrameCount; i++) {
         final index = i.toString().padLeft(2, '0');
-        loaded.add(await images.load('${GameConfig.runFramesPrefix}$index.png'));
+        loaded.add(
+          await images.load('${GameConfig.runFramesPrefix}$index.png'),
+        );
       }
       runFrames = loaded;
     } catch (error) {
-      debugPrint('P3B art: run-cycle frames unavailable ($error). '
-          'Using static hero sprite / placeholder.');
+      debugPrint('Run-cycle frames unavailable ($error). Using fallback.');
       runFrames = const [];
     }
   }
@@ -245,39 +212,50 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
     }
 
     _elapsedSeconds += dt;
+    verticalMotion.update(dt);
+    powerUps.update(dt);
+
     final ds = currentSpeed * dt;
     _travelled += ds;
     _distanceSinceWave += ds;
+
+    if (powerUps.isSolarDashing) {
+      _dashOrbTimer += dt;
+      if (_dashOrbTimer >= 0.20) {
+        _dashOrbTimer = 0;
+        add(EnergyOrb(
+          lane: laneSystem.lane,
+          initialDepth: 0.96,
+          elevation: 0.92,
+        ));
+      }
+    } else {
+      _dashOrbTimer = 0;
+    }
 
     if (_distanceSinceWave >= _distanceToNextWave) {
       _spawnWave();
     }
 
-    score.addDistance(ds);
-    _hudText.text = _hudString;
-  }
+    score.addDistance(ds, multiplier: powerUps.scoreMultiplier);
 
-  String get _hudString => _runStarted
-      ? 'Score: ${score.totalScore}   Orbs: ${score.orbsCollected}'
-      : 'TAP TO RUN';
+    _hudNotifyTimer += dt;
+    if (_hudNotifyTimer >= 0.08) {
+      _hudNotifyTimer = 0;
+      hudTick.value += 1;
+    }
+  }
 
   // --------------------------------------------------------------- gameplay
 
-  /// First-input start. Transitions Soul from standing idle to running and
-  /// activates gameplay exactly once. Subsequent calls are no-ops, so the
-  /// starting tap can never double-start or restart the run. The starting
-  /// input is intentionally NOT a lane move (handled at the gesture layer).
   void startRun() {
     if (_runStarted || _ended || paused) {
       return;
     }
     _runStarted = true;
-    _hudText.text = _hudString;
+    hudTick.value += 1;
   }
 
-  /// Lane-move intent from the gesture layer. [direction] < 0 = left,
-  /// [direction] > 0 = right. Ignored before the run starts (the first
-  /// input starts the run; it must not move lanes).
   void moveLane(int direction) {
     if (_ended || paused || !_runStarted) {
       return;
@@ -289,22 +267,80 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
     }
   }
 
+  void jump() {
+    if (_ended || paused || !_runStarted || powerUps.isSolarDashing) {
+      return;
+    }
+    if (verticalMotion.jump()) {
+      add(VfxBurst.jumpRipple(
+        Vector2(player.position.x, playerPlaneY + player.size.y * 0.36),
+      ));
+    }
+  }
+
+  void slide() {
+    if (_ended || paused || !_runStarted || powerUps.isSolarDashing) {
+      return;
+    }
+    verticalMotion.slide();
+  }
+
+  bool activateSolarShield() {
+    if (_ended || paused || !_runStarted) {
+      return false;
+    }
+    final activated = powerUps.activateShield();
+    if (activated) {
+      add(VfxBurst.shieldShatter(player.position.clone()));
+      hudTick.value += 1;
+    }
+    return activated;
+  }
+
+  /// Called when Soul collides with a non-cleared obstacle. Returns true if
+  /// Solar Aegis absorbed and shattered the obstacle; false if the run ends.
+  bool onObstacleImpact(Vector2 impactCenter) {
+    if (_ended) {
+      return false;
+    }
+    if (powerUps.consumeShieldOnHit()) {
+      add(VfxBurst.shieldShatter(impactCenter));
+      hudTick.value += 1;
+      return true;
+    }
+    onPlayerHit();
+    return false;
+  }
+
   void onPlayerHit() {
     if (_ended) {
       return;
     }
     _ended = true;
-    // S8: bank this run's collected suns (orbs) into persistent progress
-    // exactly once per run end.
     unawaited(_progress?.addSuns(score.orbsCollected) ?? Future.value());
+    hudTick.value += 1;
     pauseEngine();
     overlays.add(gameOverOverlayId);
   }
 
-  void onOrbCollected() {
-    if (!_ended) {
-      score.addOrb();
+  void onOrbCollected({Vector2? position}) {
+    if (_ended) {
+      return;
     }
+    score.addOrb(multiplier: powerUps.scoreMultiplier);
+    if (position != null) {
+      add(VfxBurst.orbCollect(position));
+    }
+    hudTick.value += 1;
+  }
+
+  void onPowerUpCollected(PowerUpKind kind, Vector2 position) {
+    if (_ended) {
+      return;
+    }
+    powerUps.activate(kind);
+    add(VfxBurst.shieldShatter(position));
+    hudTick.value += 1;
   }
 
   void _spawnWave() {
@@ -315,12 +351,41 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
     _distanceSinceWave = 0;
     _distanceToNextWave = wave.distanceToNext;
 
-    for (final lane in wave.blockedLanes) {
-      add(Obstacle(lane: lane));
+    if (!powerUps.isSolarDashing) {
+      for (final lane in wave.blockedLanes) {
+        add(Obstacle(lane: lane, kind: wave.kindForLane(lane)));
+      }
     }
+
     final orbLane = wave.orbLane;
-    if (orbLane != null) {
-      add(EnergyOrb(lane: orbLane));
+    if (orbLane != null && wave.orbTrailCount > 0) {
+      for (var i = 0; i < wave.orbTrailCount; i++) {
+        add(EnergyOrb(
+          lane: orbLane,
+          initialDepth: 1.0 + i * 0.065,
+        ));
+      }
+    }
+
+    final arcLane = wave.jumpArcLane;
+    if (arcLane != null && !powerUps.isSolarDashing) {
+      const arcCount = 5;
+      for (var i = 0; i < arcCount; i++) {
+        final t = i / (arcCount - 1);
+        add(EnergyOrb(
+          lane: arcLane,
+          initialDepth: 0.87 + i * 0.065,
+          elevation: math.sin(t * math.pi) * 1.05,
+        ));
+      }
+    }
+
+    if (wave.powerUpLane != null && wave.powerUpKind != null) {
+      add(PowerUpPickup(
+        lane: wave.powerUpLane!,
+        kind: wave.powerUpKind!,
+        initialDepth: 1.06,
+      ));
     }
   }
 
@@ -341,25 +406,30 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
     }
   }
 
-  /// Called by the app-lifecycle observer. Safe to call repeatedly and in
-  /// any state (ignored while the Game Over overlay is already up).
   void pauseByLifecycle() => pauseWithMenu();
 
   // --------------------------------------------------------------- replay
 
-  /// Restarts the run (PLAY AGAIN).
   void resetRun() {
     _runNumber += 1;
     _generator = SeededObstacleGenerator(seed: _seed + _runNumber);
 
-    for (final obstacle in children.whereType<Obstacle>().toList()) {
-      obstacle.removeFromParent();
+    for (final c in children.whereType<Obstacle>().toList()) {
+      c.removeFromParent();
     }
-    for (final orb in children.whereType<EnergyOrb>().toList()) {
-      orb.removeFromParent();
+    for (final c in children.whereType<EnergyOrb>().toList()) {
+      c.removeFromParent();
+    }
+    for (final c in children.whereType<PowerUpPickup>().toList()) {
+      c.removeFromParent();
+    }
+    for (final c in children.whereType<VfxBurst>().toList()) {
+      c.removeFromParent();
     }
 
     laneSystem.reset();
+    verticalMotion.reset();
+    powerUps.reset();
     score.reset();
     player.reset();
 
@@ -367,9 +437,8 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
     _travelled = 0;
     _distanceSinceWave = 0;
     _distanceToNextWave = GameConfig.firstWaveDistance;
+    _dashOrbTimer = 0;
     _ended = false;
-    // Replay returns to the standing-idle state: the next run also begins
-    // with a deliberate tap (same start contract as a fresh session).
     _runStarted = false;
 
     overlays.remove(gameOverOverlayId);
@@ -377,7 +446,6 @@ class SoulDuskRunGame extends FlameGame with HasCollisionDetection {
     if (paused) {
       resumeEngine();
     }
-
-    _hudText.text = _hudString;
+    hudTick.value += 1;
   }
 }

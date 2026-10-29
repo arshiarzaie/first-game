@@ -1,41 +1,42 @@
 import 'dart:ui';
 
-import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
-import 'soul_player.dart';
+import '../systems/obstacle_spawner.dart';
 
-/// A shadow spike the player must dodge by changing lanes.
-/// S5: renders the pre-rendered dark crystal-spike sprite (chroma-keyed
-/// at load); if the sprite is unavailable the approved canvas crystal
-/// placeholder is drawn instead (never a blank obstacle).
-///
-/// Spawns at the horizon (depth 1), approaches the player as depth
-/// decreases towards 0, and is recycled when it passes the player plane.
+/// 2.5D track hazard with three Subway-style vertical archetypes (S12):
+///  * [ObstacleKind.lowSpikes] — vaultable ground crystal cluster;
+///  * [ObstacleKind.highArch] — duckable overhead portal arch;
+///  * [ObstacleKind.tallMonolith] — full-height impassable rune monolith.
 class Obstacle extends PositionComponent
-    with CollisionCallbacks, HasGameReference<SoulDuskRunGame> {
-  Obstacle({required this.lane}) : super(priority: 10);
+    with HasGameReference<SoulDuskRunGame> {
+  Obstacle({
+    required this.lane,
+    this.kind = ObstacleKind.lowSpikes,
+    double initialDepth = 1.0,
+  })  : _depth = initialDepth,
+        super(priority: 10);
 
   final int lane;
-  double _depth = 1.0;
+  final ObstacleKind kind;
+  double _depth;
+  bool _resolvedPlayerPlane = false;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    anchor = Anchor.center;
-    final width = game.size.x * GameConfig.entityWidthRatio;
-    size = Vector2(width, width);
-
-    final factor = GameConfig.hitboxFactor;
-    add(RectangleHitbox(
-      size: Vector2(width * factor, width * factor),
-      position:
-          Vector2(width * (1 - factor) / 2, width * (1 - factor) / 2),
-      collisionType: CollisionType.passive,
-    ));
-
+    anchor = Anchor.bottomCenter;
+    final base = game.size.x * GameConfig.entityWidthRatio;
+    switch (kind) {
+      case ObstacleKind.lowSpikes:
+        size = Vector2(base * 1.05, base * 1.02);
+      case ObstacleKind.highArch:
+        size = Vector2(base * 1.42, base * 1.52);
+      case ObstacleKind.tallMonolith:
+        size = Vector2(base * 1.18, base * 1.74);
+    }
     _applyProjection();
   }
 
@@ -43,19 +44,76 @@ class Obstacle extends PositionComponent
   void update(double dt) {
     super.update(dt);
     _depth -= (game.currentSpeed / GameConfig.trackLength) * dt;
-    if (_depth <= 0) {
-      removeFromParent(); // passed the player without a hit
+
+    // Evaluate true 2.5D (lane, depth, vertical state) collision as the
+    // hazard crosses the player plane.
+    if (!_resolvedPlayerPlane && _depth <= 0.048 && _depth >= -0.042) {
+      final laneDiff = (game.player.currentLane - lane).abs();
+      if (laneDiff < 0.49 && !game.powerUps.isSolarDashing) {
+        final cleared = _isClearedVertically();
+        if (!cleared) {
+          _resolvedPlayerPlane = true;
+          final shatteredByShield = game.onObstacleImpact(
+            Vector2(position.x, position.y - size.y * scale.y * 0.45),
+          );
+          if (shatteredByShield) {
+            removeFromParent();
+            return;
+          }
+        }
+      }
+    }
+
+    if (_depth <= -0.16) {
+      removeFromParent();
       return;
     }
     _applyProjection();
   }
 
+  bool _isClearedVertically() {
+    switch (kind) {
+      case ObstacleKind.lowSpikes:
+        return game.verticalMotion.isClearingLow;
+      case ObstacleKind.highArch:
+        return game.verticalMotion.isDuckingHigh;
+      case ObstacleKind.tallMonolith:
+        return false;
+    }
+  }
+
   void _applyProjection() {
+    final sc = game.scaleForDepth(_depth);
     position = Vector2(
       game.laneXForDepth(lane.toDouble(), _depth),
-      game.yForDepth(_depth),
+      game.yForDepth(_depth) + size.y * sc * 0.04,
     );
-    scale = Vector2.all(game.scaleForDepth(_depth));
+    scale = Vector2.all(sc);
+
+    // 3D occlusion sorting relative to SoulPlayer (priority 20):
+    //  * Overhead arches near the player draw in front of Soul so sliding
+    //    visibly passes underneath the glowing crossbar.
+    //  * Hazards that have already passed the player plane draw in front.
+    //  * Approaching ground spikes stay < 20 so a jumping Soul vaults cleanly
+    //    over top of them.
+    if (_depth < -0.045) {
+      priority = 25;
+    } else if (kind == ObstacleKind.highArch && _depth < 0.09) {
+      priority = 23;
+    } else {
+      priority = (6 + (1.0 - _depth).clamp(0.0, 1.0) * 13).round();
+    }
+  }
+
+  Image? get _sprite {
+    switch (kind) {
+      case ObstacleKind.lowSpikes:
+        return game.obstacleSprite;
+      case ObstacleKind.highArch:
+        return game.obstacleArchSprite;
+      case ObstacleKind.tallMonolith:
+        return game.obstacleMonolithSprite;
+    }
   }
 
   @override
@@ -64,67 +122,95 @@ class Obstacle extends PositionComponent
     final w = size.x;
     final h = size.y;
 
-    final sprite = game.obstacleSprite;
+    final sprite = _sprite;
     if (sprite != null) {
-      // Contain-fit: keep the sprite's aspect inside the (unchanged)
-      // gameplay box; the hitbox contract is unaffected by art.
       final fit = (w / sprite.width < h / sprite.height)
           ? w / sprite.width
           : h / sprite.height;
       final dw = sprite.width * fit;
       final dh = sprite.height * fit;
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(w / 2, h * 0.93),
-          width: dw * 0.80,
-          height: dh * 0.22,
-        ),
-        Paint()
+
+      if (kind == ObstacleKind.highArch) {
+        // Two separate contact shadows under the left and right arch posts
+        // so the open slide gap in the middle stays clean.
+        final postShadow = Paint()
           ..color = const Color(0x800D051A)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-      );
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset((w - dw) / 2 + dw * 0.14, h * 0.96),
+            width: dw * 0.24,
+            height: h * 0.09,
+          ),
+          postShadow,
+        );
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset((w + dw) / 2 - dw * 0.14, h * 0.96),
+            width: dw * 0.24,
+            height: h * 0.09,
+          ),
+          postShadow,
+        );
+      } else {
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(w / 2, h * 0.95),
+            width: dw * 0.82,
+            height: h * 0.16,
+          ),
+          Paint()
+            ..color = const Color(0x880D051A)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        );
+      }
+
       canvas.drawImageRect(
         sprite,
-        Rect.fromLTWH(0, 0, sprite.width.toDouble(),
-            sprite.height.toDouble()),
+        Rect.fromLTWH(
+            0, 0, sprite.width.toDouble(), sprite.height.toDouble()),
         Rect.fromLTWH((w - dw) / 2, h - dh, dw, dh),
         Paint()..filterQuality = FilterQuality.medium,
       );
       return;
     }
 
-    final fill = Paint()..color = const Color(0xFF1C1030);
-    final edge = Paint()
-      ..color = const Color(0xFF8E7CC3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.05
-      ..strokeJoin = StrokeJoin.round;
-
-    final spike = Path()
-      ..moveTo(0, h)
-      ..lineTo(w * 0.5, 0)
-      ..lineTo(w, h)
-      ..close();
-    canvas.drawPath(spike, fill);
-    canvas.drawPath(spike, edge);
-
-    // inner facet so it reads as a stylized crystal, not a flat triangle
-    final facet = Path()
-      ..moveTo(w * 0.5, h * 0.12)
-      ..lineTo(w * 0.62, h * 0.85)
-      ..lineTo(w * 0.38, h * 0.85)
-      ..close();
-    canvas.drawPath(facet, Paint()..color = const Color(0xFF3A2660));
+    _renderFallback(canvas, w, h);
   }
 
-  @override
-  void onCollisionStart(
-    Set<Vector2> intersectionPoints,
-    PositionComponent other,
-  ) {
-    super.onCollisionStart(intersectionPoints, other);
-    if (other is SoulPlayer) {
-      game.onPlayerHit();
+  void _renderFallback(Canvas canvas, double w, double h) {
+    final fill = Paint()..color = const Color(0xFF1C1030);
+    final edge = Paint()
+      ..color = const Color(0xFF4DD8FF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.035
+      ..strokeJoin = StrokeJoin.round;
+
+    switch (kind) {
+      case ObstacleKind.lowSpikes:
+        final spike = Path()
+          ..moveTo(0, h)
+          ..lineTo(w * 0.5, h * 0.15)
+          ..lineTo(w, h)
+          ..close();
+        canvas.drawPath(spike, fill);
+        canvas.drawPath(spike, edge);
+      case ObstacleKind.highArch:
+        final leftPost = Rect.fromLTWH(w * 0.06, h * 0.18, w * 0.16, h * 0.82);
+        final rightPost =
+            Rect.fromLTWH(w * 0.78, h * 0.18, w * 0.16, h * 0.82);
+        final beam = Rect.fromLTWH(w * 0.04, h * 0.10, w * 0.92, h * 0.28);
+        canvas.drawRect(leftPost, fill);
+        canvas.drawRect(rightPost, fill);
+        canvas.drawRect(beam, Paint()..color = const Color(0xFF3A2068));
+        canvas.drawRect(beam, edge);
+      case ObstacleKind.tallMonolith:
+        final block = RRect.fromRectAndRadius(
+          Rect.fromLTWH(w * 0.12, h * 0.06, w * 0.76, h * 0.94),
+          Radius.circular(w * 0.06),
+        );
+        canvas.drawRRect(block, fill);
+        canvas.drawRRect(block, edge);
     }
   }
 }
