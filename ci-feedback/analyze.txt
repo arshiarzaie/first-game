@@ -1,12 +1,15 @@
 Resolving dependencies...
 Downloading packages...
   material_color_utilities 0.13.0 (0.13.1 available)
-  shared_preferences_android 2.4.28 (2.5.3 available)
-  shared_preferences_foundation 2.5.7 (2.6.0 available)
+  shared_preferences_android 2.4.28 (2.5.4 available)
+  shared_preferences_foundation 2.5.7 (2.6.1 available)
   test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.3 (2.4.4 available)
   web 1.1.1 (1.1.2 available)
 Got dependencies!
-5 packages have newer versions incompatible with dependency constraints.
+6 packages have newer versions incompatible with dependency constraints.
 Try `flutter pub outdated` for more information.
 Analyzing first-game...                                         
-No issues found! (ran in 5.6s)
+
+   info • The import of 'package:flame/components.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flame/game.dart'. Try removing the import directive • lib/game/soul_dusk_run_game.dart:5:8 • unnecessary_import
+
