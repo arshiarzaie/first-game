@@ -155,10 +155,9 @@ class TrackScene extends PositionComponent
     final dx = (w - imgW * scale) / 2 + sway;
     final drift = math.sin(game.elapsedSeconds * 0.35) *
         GameConfig.backdropDriftAmplitude;
-    final dy = (horizonY - imgH * horizonFrac * scale + drift).clamp(
-      math.min(0.0, h - imgH * scale),
-      0.0,
-    );
+    final dy = (horizonY - imgH * horizonFrac * scale + drift)
+        .clamp(math.min(0.0, h - imgH * scale), 0.0)
+        .toDouble();
 
     canvas.drawImageRect(
       backdrop,
