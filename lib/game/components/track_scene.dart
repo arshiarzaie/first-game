@@ -7,26 +7,25 @@ import 'package:flame/components.dart';
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
-/// World environment (P2 slice, S4 multi-world): the selected world's
-/// pre-rendered backdrop is drawn cover-fit with its painted horizon
-/// anchored to the game's horizon line, breathing gently and swaying
-/// opposite the player's lane for camera parallax. The code-drawn
-/// perspective track, lane dividers, flowing depth stripes and tinted
-/// edges take their colors from the world palette — gameplay projection
-/// is untouched and identical in every world. Ambient luminous motes
-/// drift over the valley to match the baked-in particles.
+/// S13 True-1/Z 3D Twilight Sky-Bridge Environment.
 ///
-/// When the backdrop image is unavailable the component renders the
-/// Phase 1 canvas placeholder sky/ridges instead (never a black scene).
+/// Renders:
+///  1. Portrait-framed high-DPI sky & horizon sanctuary (1:1 crisp, no 3x
+///     vertical zoom blur) + deep atmospheric chasm mist & drifting fireflies;
+///  2. Continuous 3D raised stone viaduct parapet curbs & vertical masonry
+///     drop-walls scrolling in exact `1 / Z` lockstep with the road;
+///  3. Perspective-correct `12 x 64` subdivided `1 / Z` flagstone mesh tiled
+///     `3.0x` along [GameConfig.trackLength] so pavers stay razor-sharp all
+///     the way beneath Soul's feet to screen bottom;
+///  4. Six symmetric pairs of high-DPI front-perspective Sanctuary Lantern
+///     Pylons seated squarely on both stone parapets, casting warm pools of
+///     light onto the stonework as they stream past.
 class TrackScene extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   TrackScene() : super(priority: -100);
 
-  // S11 perspective mesh grid: 12 horizontal columns (divisible by 6 so
-  // column boundaries land directly on the 1/3 & 2/3 rails and 1/2 center,
-  // eliminating affine trapezoid sawtooth warp) x 48 foreshortened rows.
   static const int _meshCols = 12;
-  static const int _meshRows = 48;
+  static const int _meshRows = 64;
   static final Float64List _identityMatrix4 = Float64List.fromList(const [
     1.0, 0.0, 0.0, 0.0,
     0.0, 1.0, 0.0, 0.0,
@@ -82,8 +81,8 @@ class TrackScene extends PositionComponent
       (_) => _Mote(
         x: random.nextDouble(),
         phase: random.nextDouble(),
-        speed: 0.5 + random.nextDouble() * 0.8,
-        radius: 1.1 + random.nextDouble() * 1.4,
+        speed: 0.45 + random.nextDouble() * 0.75,
+        radius: 1.2 + random.nextDouble() * 1.6,
       ),
       growable: false,
     );
@@ -121,22 +120,134 @@ class TrackScene extends PositionComponent
     } else {
       _renderPlaceholderBackdrop(canvas, w, h);
     }
+    _renderChasmAtmosphere(canvas, w, h);
     _renderSpeedLines(canvas, w, h);
     _renderCausewayFlanks(canvas, w, h);
     _renderTrack(canvas, w, h);
     _renderCorridorPillars(canvas, w, h);
   }
 
-  /// Kinetic radial wind/light streaks along the outer corridor flanks as
-  /// forward speed climbs or during Sunburst Sky-Dash (S12).
+  /// Portrait-crisp sky + horizon backdrop rendering (S13: fits width cleanly
+  /// at ~1:1 native DPI so all floating islands, trees, and canyon cliffs
+  /// frame the horizon without 3x vertical upscale blur).
+  void _renderWorldBackdrop(
+      Canvas canvas, double w, double h, Image backdrop) {
+    final horizonY = game.horizonY;
+    final imgW = backdrop.width.toDouble();
+    final imgH = backdrop.height.toDouble();
+    final baseFill =
+        Color(GameConfig.trackFillArgbFor(game.selectedWorld) | 0xFF000000);
+
+    // Solid deep chasm base below the sky dome so zero unpainted pixels ever appear.
+    canvas.drawRect(Offset.zero & Size(w, h), Paint()..color = baseFill);
+
+    final horizonFrac =
+        GameConfig.backdropHorizonFractionFor(game.selectedWorld);
+    // Fit portrait width + enough vertical span to reach horizonY cleanly.
+    final minScaleForSky =
+        (horizonY + GameConfig.backdropDriftAmplitude + 8) /
+            math.max(1.0, imgH * horizonFrac);
+    final scale = math.max(w / imgW, minScaleForSky) * 1.08;
+
+    final laneCenter = (GameConfig.laneCount - 1) / 2;
+    final sway =
+        (game.laneSystem.lane - laneCenter) * -GameConfig.cameraSwayPerLane;
+    final dx = (w - imgW * scale) / 2 + sway;
+    final drift = math.sin(game.elapsedSeconds * 0.35) *
+        GameConfig.backdropDriftAmplitude;
+    final dy = (horizonY - imgH * horizonFrac * scale + drift).clamp(
+      math.min(0.0, h - imgH * scale),
+      0.0,
+    );
+
+    canvas.drawImageRect(
+      backdrop,
+      Rect.fromLTWH(0, 0, imgW, imgH),
+      Rect.fromLTWH(dx, dy, imgW * scale, imgH * scale),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+  }
+
+  /// Deep misty chasm & scrolling valley fog banks flanking the sky-bridge
+  /// below [SoulDuskRunGame.horizonY].
+  void _renderChasmAtmosphere(Canvas canvas, double w, double h) {
+    final horizonY = game.horizonY;
+    if (h <= horizonY) {
+      return;
+    }
+    final world = game.selectedWorld;
+    final Color mistTop;
+    final Color mistMid;
+    final Color chasmDeep;
+    switch (world) {
+      case GameWorld.duskHollow:
+        mistTop = const Color(0x005C3496);
+        mistMid = const Color(0xB8321A5C);
+        chasmDeep = const Color(0xF2120826);
+      case GameWorld.moonveilMarsh:
+        mistTop = const Color(0x001D6B75);
+        mistMid = const Color(0xB80E3B46);
+        chasmDeep = const Color(0xF206161E);
+      case GameWorld.emberfallCanyon:
+        mistTop = const Color(0x008A3E2B);
+        mistMid = const Color(0xB84A2018);
+        chasmDeep = const Color(0xF21C0B08);
+    }
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, horizonY - h * 0.02, w, h - horizonY + h * 0.02),
+      Paint()
+        ..shader = Gradient.linear(
+          Offset(0, horizonY - h * 0.02),
+          Offset(0, h),
+          [mistTop, mistMid, chasmDeep],
+          const [0.0, 0.28, 1.0],
+        ),
+    );
+
+    // Soft drifting chasm mist billows on left & right flanks (scrolling forward
+    // subtly with world travel so the whole valley feels alive).
+    final edgeTint = Color(GameConfig.trackEdgeArgbFor(world));
+    final flow = (game.travelled / GameConfig.trackLength * 0.55) % 1.0;
+    for (var i = 0; i < 4; i++) {
+      final t = (flow + i * 0.25) % 1.0;
+      final yMist = horizonY + (h - horizonY) * (0.12 + 0.78 * t * t);
+      final rMist = w * (0.16 + 0.18 * t);
+      final alpha = math.sin(t * math.pi) * 0.14;
+      final mistPaint = Paint()
+        ..shader = Gradient.radial(
+          Offset(w * 0.10, yMist),
+          rMist,
+          [
+            edgeTint.withValues(alpha: alpha),
+            edgeTint.withValues(alpha: 0.0),
+          ],
+        );
+      canvas.drawCircle(Offset(w * 0.10, yMist), rMist, mistPaint);
+
+      final mistPaintR = Paint()
+        ..shader = Gradient.radial(
+          Offset(w * 0.90, yMist + 18),
+          rMist,
+          [
+            edgeTint.withValues(alpha: alpha),
+            edgeTint.withValues(alpha: 0.0),
+          ],
+        );
+      canvas.drawCircle(Offset(w * 0.90, yMist + 18), rMist, mistPaintR);
+    }
+
+    _renderMotes(canvas, w, h);
+  }
+
   void _renderSpeedLines(Canvas canvas, double w, double h) {
     if (!game.isRunStarted) {
       return;
     }
     final intensity = game.powerUps.isSolarDashing
         ? 1.0
-        : ((game.difficulty.levelAt(game.elapsedSeconds) - 0.12) / 0.88)
-            .clamp(0.0, 0.75);
+        : ((game.difficulty.levelAt(game.elapsedSeconds) - 0.14) / 0.86)
+            .clamp(0.0, 0.72);
     if (intensity <= 0.02) {
       return;
     }
@@ -151,164 +262,215 @@ class TrackScene extends PositionComponent
       ..blendMode = BlendMode.plus;
 
     const streakCount = 8;
-    final phaseBase = game.travelled / GameConfig.trackLength * 1.9;
+    final phaseBase = game.travelled / GameConfig.trackLength * 1.8;
     for (var i = 0; i < streakCount; i++) {
       final side = i.isEven ? -1.0 : 1.0;
       final t = (phaseBase + i * 0.137) % 1.0;
-      final r0 = 0.26 + t * 0.56;
-      final r1 = (r0 + 0.14).clamp(0.0, 1.05);
-      final spreadY = 0.08 + (i % 4) * 0.16;
+      final r0 = 0.28 + t * 0.54;
+      final r1 = (r0 + 0.13).clamp(0.0, 1.05);
+      final spreadY = 0.10 + (i % 4) * 0.16;
       final p0 = Offset(
-        cx + side * w * 0.54 * r0,
+        cx + side * w * 0.52 * r0,
         horizonY + (h - horizonY) * spreadY * r0,
       );
       final p1 = Offset(
-        cx + side * w * 0.54 * r1,
+        cx + side * w * 0.52 * r1,
         horizonY + (h - horizonY) * spreadY * r1,
       );
-      final fade = math.sin(t * math.pi) * intensity * 0.42;
+      final fade = math.sin(t * math.pi) * intensity * 0.38;
       paint.color = color.withValues(alpha: fade.clamp(0.0, 1.0));
       canvas.drawLine(p0, p1, paint);
     }
   }
 
-  /// 3D stone viaduct side-walls dropping outward from both edges of the
-  /// track, with perspective masonry ribs scrolling in 1:1 lockstep with
-  /// the track bricks so the causeway reads as a solid elevated structure
-  /// moving through the valley (S12).
+  /// True `1 / Z` 3D raised stone viaduct parapet ledge + vertical cliff
+  /// drop-wall flanking both sides of the causeway.
   void _renderCausewayFlanks(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
     if (h <= horizonY) {
       return;
     }
     final spanToPlayer = math.max(1.0, game.playerPlaneY - horizonY);
-    final aMax = (h - horizonY) / spanToPlayer;
-    final cx = w / 2;
-    final halfTop = game.halfWidthForDepth(1);
-    final halfPlayer = game.halfWidthForDepth(0);
-    final halfBottom = halfTop + (halfPlayer - halfTop) * aMax;
+    final tBottom = (h - horizonY) / spanToPlayer;
+    const pFar = GameConfig.farScale;
+    final pBottom = pFar + tBottom * (1.0 - pFar);
 
-    final wallTop = w * 0.018;
-    final wallBottom = w * 0.14;
-    final baseFill = Color(GameConfig.trackFillArgbFor(game.selectedWorld));
+    final cx = w / 2;
+    final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
+    final halfTop = halfPlayer * pFar;
+    final halfBottom = halfPlayer * pBottom;
+
+    // Parapet top ledge width & outer vertical stone drop-cliff width scale
+    // linearly with `p = 1/Z` (exact 3D pinhole geometry!).
+    final parapetPlayer = w * 0.036;
+    final cliffPlayer = w * 0.026;
+    final pTopW = parapetPlayer * pFar;
+    final pBotW = parapetPlayer * pBottom;
+    final cTopW = cliffPlayer * pFar;
+    final cBotW = cliffPlayer * pBottom;
+
+    final baseFill =
+        Color(GameConfig.trackFillArgbFor(game.selectedWorld) | 0xFF000000);
+    final edgeColor =
+        Color(GameConfig.trackEdgeArgbFor(game.selectedWorld) | 0xFF000000);
+    final parapetTop = Color.lerp(baseFill, edgeColor, 0.34)!;
+    final cliffShade = Color.lerp(baseFill, const Color(0xFF070310), 0.55)!;
 
     for (final side in const [-1.0, 1.0]) {
-      final wall = Path()
+      // 1. Outer vertical viaduct drop-cliff face
+      final cliffPath = Path()
+        ..moveTo(cx + side * (halfTop + pTopW), horizonY)
+        ..lineTo(cx + side * (halfTop + pTopW + cTopW), horizonY + 4)
+        ..lineTo(cx + side * (halfBottom + pBotW + cBotW), h)
+        ..lineTo(cx + side * (halfBottom + pBotW), h)
+        ..close();
+      canvas.drawPath(
+        cliffPath,
+        Paint()
+          ..shader = Gradient.linear(
+            Offset(cx, horizonY),
+            Offset(cx, h),
+            [cliffShade.withValues(alpha: 0.15), cliffShade],
+          ),
+      );
+
+      // 2. Raised stone parapet top ledge (lantern pylons stand right on this!)
+      final ledgePath = Path()
         ..moveTo(cx + side * halfTop, horizonY)
-        ..lineTo(cx + side * (halfTop + wallTop), horizonY + 8)
-        ..lineTo(cx + side * (halfBottom + wallBottom), h)
+        ..lineTo(cx + side * (halfTop + pTopW), horizonY)
+        ..lineTo(cx + side * (halfBottom + pBotW), h)
         ..lineTo(cx + side * halfBottom, h)
         ..close();
       canvas.drawPath(
-        wall,
+        ledgePath,
         Paint()
           ..shader = Gradient.linear(
             Offset(cx, horizonY),
             Offset(cx, h),
             [
-              baseFill.withValues(alpha: 0.0),
-              baseFill.withValues(alpha: 0.78),
+              parapetTop.withValues(alpha: 0.18),
+              parapetTop.withValues(alpha: 0.96),
             ],
           ),
       );
+
+      // Crisp outer bevel highlight along parapet rim
+      canvas.drawLine(
+        Offset(cx + side * (halfTop + pTopW), horizonY),
+        Offset(cx + side * (halfBottom + pBotW), h),
+        Paint()
+          ..color = edgeColor.withValues(alpha: 0.45)
+          ..strokeWidth = 1.4,
+      );
     }
 
-    // Scrolling stone buttress ribs along both viaduct walls (same u^2
-    // foreshortening as the track strip -> zero relative slip).
-    final ribPaint = Paint()
+    // Scrolling 1/Z stone masonry joints across the parapet & drop-cliff
+    // (100% locked to ground scroll!).
+    final jointPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
-    final edgeColor = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld));
-    const ribStep = 0.12;
-    final phase = (game.travelled / GameConfig.trackLength) % ribStep;
-    for (var k = 0; k < 10; k++) {
-      final u = phase + k * ribStep;
-      if (u <= 0.06) {
+      ..strokeWidth = 1.4;
+    const jointCount = 16;
+    const worldSpan = 1.12;
+    const step = worldSpan / jointCount;
+    final scrollPhase = (game.travelled / GameConfig.trackLength) % step;
+
+    for (var k = 0; k < jointCount; k++) {
+      final distFromHorizon = scrollPhase + k * step; // 0 = horizon, 1 = player
+      final depth = 1.0 - distFromHorizon;
+      final p = game.perspectiveFactor(depth);
+      final y = game.yForDepth(depth);
+      if (y <= horizonY + 2 || y > h + 20) {
         continue;
       }
-      final a = math.pow(u, GameConfig.perspectiveExponent).toDouble();
-      final y = horizonY + spanToPlayer * a;
-      if (y > h + 40) {
-        continue;
+      final half = halfPlayer * p;
+      final pw = parapetPlayer * p;
+      final cw = cliffPlayer * p;
+      final fade = (distFromHorizon / 0.25).clamp(0.0, 1.0) * 0.48;
+      jointPaint.color = const Color(0xFF0E061E).withValues(alpha: fade);
+
+      for (final side in const [-1.0, 1.0]) {
+        final x0 = cx + side * half;
+        final x1 = cx + side * (half + pw);
+        final x2 = cx + side * (half + pw + cw);
+        canvas.drawLine(Offset(x0, y), Offset(x1, y), jointPaint);
+        canvas.drawLine(Offset(x1, y), Offset(x2, y + cw * 0.9), jointPaint);
       }
-      final half = halfTop + (halfPlayer - halfTop) * a;
-      final wallW = wallTop + (wallBottom - wallTop) * (a / math.max(1.0, aMax));
-      final fade = ((u - 0.06) / 0.22).clamp(0.0, 1.0) * 0.36;
-      ribPaint.color = edgeColor.withValues(alpha: fade);
-      canvas.drawLine(
-        Offset(cx - half, y),
-        Offset(cx - half - wallW, y + wallW * 0.55),
-        ribPaint,
-      );
-      canvas.drawLine(
-        Offset(cx + half, y),
-        Offset(cx + half + wallW, y + wallW * 0.55),
-        ribPaint,
-      );
     }
   }
 
-  /// Streams 5 symmetric pairs of world-authored stone lantern pillars
-  /// down both outer flanks of the viaduct at exact 2.5D world speed so
-  /// environment and track advance together like Subway Surfers (S12).
+  /// Streams 6 symmetric pairs of high-DPI front-perspective Sanctuary Lantern
+  /// Pylons seated squarely on both viaduct parapets in exact `1 / Z` lockstep.
   void _renderCorridorPillars(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
     if (h <= horizonY) {
       return;
     }
-    final spanToPlayer = math.max(1.0, game.playerPlaneY - horizonY);
     final cx = w / 2;
-    final halfTop = game.halfWidthForDepth(1);
-    final halfPlayer = game.halfWidthForDepth(0);
+    final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
+    final parapetMidPlayer = w * 0.018;
     final pillar = game.corridorPillar;
+    final auraColor = Color(GameConfig.lanternAuraArgbFor(game.selectedWorld));
 
-    const pairCount = 5;
-    const cycleSpan = 1.22;
-    const step = cycleSpan / pairCount;
-    final phase = (game.travelled / GameConfig.trackLength) % step;
+    const pairCount = 6;
+    const worldSpan = 1.14; // covers depth 1.0 down to depth -0.14
+    const step = worldSpan / pairCount;
+    final scrollPhase = (game.travelled / GameConfig.trackLength) % step;
 
+    // Draw back-to-front (smaller distFromHorizon = closer to horizon first!).
     for (var k = 0; k < pairCount; k++) {
-      final u = phase + k * step;
-      if (u < 0.035) {
+      final distFromHorizon = scrollPhase + k * step;
+      if (distFromHorizon <= 0.02) {
         continue;
       }
-      final a = math.pow(u, GameConfig.perspectiveExponent).toDouble();
-      final yBase = horizonY + spanToPlayer * a;
-      final half = halfTop + (halfPlayer - halfTop) * a;
-      final sc = GameConfig.farScale +
-          (1 - GameConfig.farScale) *
-              math.pow(u, GameConfig.scaleExponent).toDouble();
-      final alpha = ((u - 0.035) / 0.16).clamp(0.0, 1.0);
+      final depth = 1.0 - distFromHorizon;
+      final p = game.perspectiveFactor(depth);
+      final yBase = game.yForDepth(depth);
+      if (yBase > h + w * 0.35) {
+        continue;
+      }
+      final alpha = (distFromHorizon / 0.14).clamp(0.0, 1.0);
+      final half = halfPlayer * p;
+      final parapetMid = parapetMidPlayer * p;
 
-      final pillarH = w * 0.34 * sc;
-      final aspect =
-          pillar != null ? pillar.width / pillar.height : 0.44;
-      final pillarW = pillarH * aspect;
-      final flankOffset = half + pillarW * 0.44;
+      final pillarW = w * 0.185 * p;
+      final aspect = pillar != null ? pillar.height / pillar.width : 1.75;
+      final pillarH = pillarW * aspect;
 
       for (final side in const [-1.0, 1.0]) {
-        final footX = cx + side * flankOffset;
+        final footX = cx + side * (half + parapetMid);
         final footY = yBase + pillarH * 0.05;
-        if (footX + pillarW < -20 || footX - pillarW > w + 20) {
+        if (footX + pillarW < -30 || footX - pillarW > w + 30) {
           continue;
         }
 
-        // Contact shadow on the viaduct parapet ledge.
+        // Warm lantern light pool cast onto the stone curb & parapet!
         canvas.drawOval(
           Rect.fromCenter(
-            center: Offset(footX, footY - pillarH * 0.03),
-            width: pillarW * 0.92,
-            height: pillarW * 0.28,
+            center: Offset(footX - side * pillarW * 0.18, yBase),
+            width: pillarW * 1.55,
+            height: pillarW * 0.52,
           ),
           Paint()
-            ..color = const Color(0xFF0A0416).withValues(alpha: 0.55 * alpha)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+            ..color = auraColor.withValues(alpha: 0.16 * alpha)
+            ..blendMode = BlendMode.plus
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        );
+
+        // Ground contact shadow on parapet ledge.
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(footX, yBase),
+            width: pillarW * 0.68,
+            height: pillarW * 0.20,
+          ),
+          Paint()
+            ..color = const Color(0xFF090314).withValues(alpha: 0.62 * alpha)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
         );
 
         if (pillar != null) {
           canvas.save();
           canvas.translate(footX, footY);
-          // Mirror right-flank pillar so both lantern faces angle inward.
           if (side > 0) {
             canvas.scale(-1, 1);
           }
@@ -323,109 +485,67 @@ class TrackScene extends PositionComponent
           );
           canvas.restore();
         } else {
-          // Lightweight canvas fallback when asset bundle is absent in tests.
-          final rect = Rect.fromLTWH(
-            footX - pillarW * 0.32,
-            footY - pillarH * 0.92,
-            pillarW * 0.64,
-            pillarH * 0.92,
-          );
           canvas.drawRect(
-            rect,
+            Rect.fromLTWH(
+              footX - pillarW * 0.28,
+              footY - pillarH * 0.90,
+              pillarW * 0.56,
+              pillarH * 0.90,
+            ),
             Paint()
               ..color =
                   const Color(0xFF281A42).withValues(alpha: 0.85 * alpha),
           );
         }
 
-        // Warm breathing lantern aura at the pillar crown.
-        final lanternPulse =
-            0.88 + 0.12 * math.sin(game.elapsedSeconds * 3.8 + k);
+        // Gentle breathing lantern flame halo.
+        final pulse =
+            0.90 + 0.10 * math.sin(game.elapsedSeconds * 3.6 + k * 1.3);
         canvas.drawCircle(
-          Offset(footX, footY - pillarH * 0.72),
-          pillarW * 0.58 * lanternPulse,
+          Offset(footX, footY - pillarH * 0.71),
+          pillarW * 0.44 * pulse,
           Paint()
-            ..color =
-                const Color(0xFFFFC857).withValues(alpha: 0.26 * alpha)
+            ..color = auraColor.withValues(alpha: 0.22 * alpha)
             ..blendMode = BlendMode.plus,
         );
       }
     }
   }
 
-  /// Cover-fits the selected world's matte painting so the whole screen
-  /// stays painted, anchors its painted horizon near the game horizon,
-  /// adds breathing drift and lane-opposed camera sway.
-  void _renderWorldBackdrop(
-      Canvas canvas, double w, double h, Image backdrop) {
-    final horizonY = game.horizonY;
-    final imgW = backdrop.width.toDouble();
-    final imgH = backdrop.height.toDouble();
-
-    // 8% overscan so drift/sway can never expose an unpainted edge.
-    final scale = math.max(w / imgW, h / imgH) * 1.08;
-
-    final laneCenter = (GameConfig.laneCount - 1) / 2;
-    final sway = (game.laneSystem.lane - laneCenter) *
-        -GameConfig.cameraSwayPerLane;
-    final dx = (w - imgW * scale) / 2 + sway;
-
-    final drift = math.sin(game.elapsedSeconds * 0.35) *
-        GameConfig.backdropDriftAmplitude;
-    // Clamp keeps the (covering) image from ever leaving a visible gap.
-    final horizonFraction =
-        GameConfig.backdropHorizonFractionFor(game.selectedWorld);
-    var dy = horizonY - imgH * horizonFraction * scale + drift;
-    dy = dy.clamp(h - imgH * scale, 0.0);
-
-    canvas.drawImageRect(
-      backdrop,
-      Rect.fromLTWH(0, 0, imgW, imgH),
-      Rect.fromLTWH(dx, dy, imgW * scale, imgH * scale),
-      Paint()..filterQuality = FilterQuality.medium,
-    );
-    _renderMotes(canvas, w, h);
-  }
-
-  /// Ambient golden motes drifting towards the viewer over the valley.
   void _renderMotes(Canvas canvas, double w, double h) {
     final t = game.elapsedSeconds;
-    final paint = Paint()
-      ..color = const Color(0x33FFD166)
-      ..blendMode = BlendMode.plus;
+    final paint = Paint()..blendMode = BlendMode.plus;
     for (final mote in _motes) {
-      final cycle = (t * 0.021 * mote.speed + mote.phase) % 1.0;
-      final fade = math.sin(cycle * math.pi); // fade in/out over the fall
-      final yF = 0.22 + 0.74 * cycle; // sky band down to below the path
-      final wobble = math.sin(t * 0.6 * mote.speed + mote.phase * 6.28) * 8;
+      final cycle = (t * 0.022 * mote.speed + mote.phase) % 1.0;
+      final fade = math.sin(cycle * math.pi);
+      final yF = 0.24 + 0.72 * cycle;
+      final wobble = math.sin(t * 0.65 * mote.speed + mote.phase * 6.28) * 9;
       paint.color = Color.fromARGB(
-        (0x33 * fade).round(),
+        (0x40 * fade).round(),
         0xFF,
-        0xD1,
-        0x66,
+        0xD8,
+        0x75,
       );
       canvas.drawCircle(
         Offset(mote.x * w + wobble, yF * h),
-        mote.radius * (0.6 + cycle),
+        mote.radius * (0.65 + cycle * 0.8),
         paint,
       );
     }
   }
 
-  /// The perspective track: trapezoid, lane dividers, flowing depth
-  /// stripes and cyan edges. Translucent fill lets the backdrop's valley
-  /// floor show through so world and path read as one place.
+  /// True `1 / Z` perspective track trapezoid & high-DPI flagstone mesh.
   void _renderTrack(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
     final spanToPlayer = math.max(1.0, game.playerPlaneY - horizonY);
-    final aMax = (h - horizonY) / spanToPlayer;
+    final tBottom = (h - horizonY) / spanToPlayer;
+    const pFar = GameConfig.farScale;
+    final pBottom = pFar + tBottom * (1.0 - pFar);
+
     final cx = w / 2;
-    final halfTop = game.halfWidthForDepth(1);
-    final halfPlayer = game.halfWidthForDepth(0);
-    // Extrapolate the exact linear-in-approach cone past playerPlaneY
-    // (0.86h) to the screen bottom (1.00h) so track and entity projection
-    // stay 1:1 aligned at every depth while filling the lower frame (S11).
-    final halfBottom = halfTop + (halfPlayer - halfTop) * aMax;
+    final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
+    final halfTop = halfPlayer * pFar;
+    final halfBottom = halfPlayer * pBottom;
 
     final track = Path()
       ..moveTo(cx - halfTop, horizonY)
@@ -440,20 +560,14 @@ class TrackScene extends PositionComponent
           Offset(cx, horizonY),
           Offset(cx, h),
           [
-            // near the horizon the painted world floor shows through so
-            // the track visually melts into the selected world's ground;
-            // it densifies towards the player for readability (S8).
             Color(GameConfig.trackFillArgbFor(game.selectedWorld))
-                .withValues(alpha: 0.25),
+                .withValues(alpha: 0.35),
             Color(GameConfig.trackFillArgbFor(game.selectedWorld))
-                .withValues(alpha: 0.85),
+                .withValues(alpha: 0.94),
           ],
         ),
     );
 
-    // S11: world-authored orthographic track strip warped with true 2.5D
-    // perspective foreshortening across a 12x48 mesh all the way to the
-    // screen bottom, with a soft top mist fade into the horizon glow.
     final strip = game.trackStrip;
     if (strip != null && h > horizonY) {
       final trackBounds = Rect.fromLTWH(0, horizonY, w, h - horizonY);
@@ -462,21 +576,15 @@ class TrackScene extends PositionComponent
         canvas,
         strip,
         horizonY: horizonY,
+        h: h,
         spanToPlayer: spanToPlayer,
-        aMax: aMax,
         cx: cx,
-        halfTop: halfTop,
         halfPlayer: halfPlayer,
       );
-      final curb = Paint()
-        ..color = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-      canvas.drawLine(
-          Offset(cx - halfTop, horizonY), Offset(cx - halfBottom, h), curb);
-      canvas.drawLine(
-          Offset(cx + halfTop, horizonY), Offset(cx + halfBottom, h), curb);
-      final fadeEnd = horizonY + (h - horizonY) * 0.06;
+
+      // Soft horizon atmospheric haze over the farthest 5% of the bridge so
+      // the causeway melts organically into the distant Citadel / Moon mist.
+      final fadeEnd = horizonY + (h - horizonY) * 0.05;
       canvas.drawRect(
         Rect.fromLTWH(0, horizonY, w, fadeEnd - horizonY + 1),
         Paint()
@@ -488,100 +596,97 @@ class TrackScene extends PositionComponent
           ),
       );
       canvas.restore();
+      return;
     }
 
-    // Code-drawn rails only when the authored strip is unavailable: the
-    // strip bakes its own rails and drawing both misaligns (S10).
-    if (strip == null) {
-      final edge = Paint()
-        ..color = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
+    // Fallback rails & stripes when running headless tests without assets.
+    final edge = Paint()
+      ..color = Color(GameConfig.trackEdgeArgbFor(game.selectedWorld))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawLine(
+        Offset(cx - halfTop, horizonY), Offset(cx - halfBottom, h), edge);
+    canvas.drawLine(
+        Offset(cx + halfTop, horizonY), Offset(cx + halfBottom, h), edge);
+
+    final lanePaint = Paint()
+      ..color = Color(GameConfig.trackLaneArgbFor(game.selectedWorld))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    for (var i = 1; i < GameConfig.laneCount; i++) {
+      final f = i / GameConfig.laneCount;
       canvas.drawLine(
-          Offset(cx - halfTop, horizonY), Offset(cx - halfBottom, h), edge);
-      canvas.drawLine(
-          Offset(cx + halfTop, horizonY), Offset(cx + halfBottom, h), edge);
+        Offset(cx - halfTop + 2 * halfTop * f, horizonY),
+        Offset(cx - halfBottom + 2 * halfBottom * f, h),
+        lanePaint,
+      );
     }
 
-    // S11: baked rails sit at the lane boundaries (thirds of the strip
-    // width), so code lane dividers are fallback-only too.
-    if (strip == null) {
-      final lanePaint = Paint()
-        ..color = Color(GameConfig.trackLaneArgbFor(game.selectedWorld))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-      for (var i = 1; i < GameConfig.laneCount; i++) {
-        final f = i / GameConfig.laneCount;
-        canvas.drawLine(
-          Offset(cx - halfTop + 2 * halfTop * f, horizonY),
-          Offset(cx - halfBottom + 2 * halfBottom * f, h),
-          lanePaint,
-        );
+    final stripe = Paint()
+      ..color = Color(GameConfig.trackStripeArgbFor(game.selectedWorld))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    const stripeCount = 12;
+    final spacing = GameConfig.trackLength / stripeCount;
+    for (var i = 0; i < stripeCount; i++) {
+      final phase = (game.travelled + i * spacing) % GameConfig.trackLength;
+      final depth = 1 - phase / GameConfig.trackLength;
+      final y = game.yForDepth(depth);
+      if (y <= horizonY + 2 || y >= h - 2) {
+        continue;
       }
-    }
-
-    // Flowing depth stripes are the fallback motion cue — the authored
-    // strip already paints its own flow, so they are skipped with it.
-    if (strip == null) {
-      final stripe = Paint()
-        ..color = Color(GameConfig.trackStripeArgbFor(game.selectedWorld))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3;
-      const stripeCount = 9;
-      final spacing = GameConfig.trackLength / stripeCount;
-      for (var i = 0; i < stripeCount; i++) {
-        final phase =
-            (game.travelled + i * spacing) % GameConfig.trackLength;
-        final depth = 1 - phase / GameConfig.trackLength;
-        final y = game.yForDepth(depth);
-        if (y <= horizonY + 2 || y >= h - 2) {
-          continue;
-        }
-        final half = game.halfWidthForDepth(depth) * 0.96;
-        canvas.drawLine(Offset(cx - half, y), Offset(cx + half, y), stripe);
-      }
+      final half = game.halfWidthForDepth(depth) * 0.96;
+      canvas.drawLine(Offset(cx - half, y), Offset(cx + half, y), stripe);
     }
   }
 
-  /// Warps the orthographic strip into the 2.5D track cone as a 12x48
-  /// subdivided triangle mesh (S11). Sampling world distance `u` uniformly
-  /// and projecting `a = u^perspectiveExponent` locks brick scroll 1:1 to
-  /// obstacle/orb motion and compresses stone courses naturally toward the
-  /// horizon, while the 12 horizontal subdivisions eliminate affine
-  /// trapezoid sawtooth distortion on the baked rails.
+  /// True `1 / Z` perspective-correct mesh rasterizer (`12 x 64` grid).
+  ///
+  /// Screen `y` steps uniformly from `horizonY` to `h`, so `p = 1 / Z` steps
+  /// linearly, `z = 1 / p` recovers exact 3D world distance, and `v` tiles
+  /// `track_strip.png` (`1024x2048`) [GameConfig.trackTileRepeats] times per
+  /// [GameConfig.trackLength] — zero foreground stretch, zero obstacle slip!
   void _renderStripMesh(
     Canvas canvas,
     Image strip, {
     required double horizonY,
+    required double h,
     required double spanToPlayer,
-    required double aMax,
     required double cx,
-    required double halfTop,
     required double halfPlayer,
   }) {
     final stripW = strip.width.toDouble();
     final stripH = strip.height.toDouble();
-    final scroll = (game.travelled / GameConfig.trackLength) % 1.0;
-    final uMax =
-        math.pow(math.max(0.0, aMax), 1 / GameConfig.perspectiveExponent)
-            .toDouble();
+    const pFar = GameConfig.farScale;
+    final tBottom = (h - horizonY) / spanToPlayer;
+    final scroll =
+        (game.travelled / GameConfig.trackLength) * GameConfig.trackTileRepeats;
 
-    var p = 0;
+    var idx = 0;
     for (var r = 0; r <= _meshRows; r++) {
-      final u = (r / _meshRows) * uMax;
-      final a = math.pow(u, GameConfig.perspectiveExponent).toDouble();
-      final y = horizonY + spanToPlayer * a;
-      final half = halfTop + (halfPlayer - halfTop) * a;
-      final v = (u - scroll) * stripH;
+      final rowFrac = r / _meshRows;
+      // Gently bias row density near the horizon where `dz/dy` changes fastest.
+      final s = rowFrac * rowFrac * 0.35 + rowFrac * 0.65;
+      final t = s * tBottom;
+      final y = horizonY + spanToPlayer * t;
+      final p = pFar + t * (1.0 - pFar);
+      final z = 1.0 / p;
+      final distFromHorizon =
+          (GameConfig.farDepthRatio - z) / (GameConfig.farDepthRatio - 1.0);
+      final vUnwrapped =
+          (distFromHorizon * GameConfig.trackTileRepeats - (scroll % 1.0)) *
+              stripH;
+      final half = halfPlayer * p;
       final left = cx - half;
       final width = half * 2;
+
       for (var c = 0; c <= _meshCols; c++) {
         final fx = c / _meshCols;
-        _meshPos[p] = left + width * fx;
-        _meshPos[p + 1] = y;
-        _meshTex[p] = stripW * fx;
-        _meshTex[p + 1] = v;
-        p += 2;
+        _meshPos[idx] = left + width * fx;
+        _meshPos[idx + 1] = y;
+        _meshTex[idx] = stripW * fx;
+        _meshTex[idx + 1] = vUnwrapped;
+        idx += 2;
       }
     }
 
@@ -602,32 +707,24 @@ class TrackScene extends PositionComponent
     canvas.drawVertices(vertices, BlendMode.srcOver, paint);
   }
 
-  /// Phase 1 placeholder environment (canvas only): night sky gradient,
-  /// stars, sunset glow, parallax ridges, ground. Used when the backdrop
-  /// asset is not available.
   void _renderPlaceholderBackdrop(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
     final cx = w / 2;
 
-    // --- sky gradient ---
     final sky = Paint()
       ..shader = Gradient.linear(
         Offset.zero,
         Offset(0, h),
         const [Color(0xFF0E0920), Color(0xFF1C1236), Color(0xFF33205A)],
-        // dart:ui requires explicit colorStops when passing 3+ colors;
-        // omitting them throws ArgumentError during paint -> black scene.
         const [0.0, 0.55, 1.0],
       );
     canvas.drawRect(Offset.zero & Size(w, h), sky);
 
-    // --- stars ---
     final starPaint = Paint()..color = const Color(0xAAFFF6E0);
     for (final star in _stars) {
       canvas.drawCircle(Offset(star.dx * w, star.dy * h), 1.2, starPaint);
     }
 
-    // --- sunset glow above the horizon ---
     final glow = Paint()
       ..shader = Gradient.radial(
         Offset(cx, horizonY),
@@ -636,19 +733,15 @@ class TrackScene extends PositionComponent
       );
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), glow);
 
-    // --- parallax ridge silhouettes (slow = far, faster = nearer) ---
-    _drawRidge(canvas, w, horizonY, game.travelled * 0.02, w * 0.34,
-        h * 0.05, const Color(0xFF1B1133));
-    _drawRidge(canvas, w, horizonY, game.travelled * 0.05, w * 0.26,
-        h * 0.028, const Color(0xFF231741));
+    _drawRidge(canvas, w, horizonY, game.travelled * 0.02, w * 0.34, h * 0.05,
+        const Color(0xFF1B1133));
+    _drawRidge(canvas, w, horizonY, game.travelled * 0.05, w * 0.26, h * 0.028,
+        const Color(0xFF231741));
 
-    // --- ground ---
     canvas.drawRect(Rect.fromLTWH(0, horizonY, w, h - horizonY),
         Paint()..color = const Color(0xFF191028));
   }
 
-  /// Draws one ridge layer: a flat band on the base line plus triangular
-  /// peaks scrolling by [offset] so distant terrain drifts sideways.
   void _drawRidge(
     Canvas canvas,
     double width,
@@ -659,8 +752,6 @@ class TrackScene extends PositionComponent
     Color color,
   ) {
     final paint = Paint()..color = color;
-
-    // base band (keeps the silhouette solid beneath the peaks)
     canvas.drawRect(Rect.fromLTWH(0, baseY, width, peakHeight * 0.4), paint);
 
     final path = Path()..moveTo(-step, baseY);
@@ -684,8 +775,6 @@ class TrackScene extends PositionComponent
   }
 }
 
-/// One ambient luminous mote: fixed horizontal anchor plus a falling
-/// cycle (phase/speed/radius) modulated by run time.
 class _Mote {
   const _Mote({
     required this.x,

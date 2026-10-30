@@ -53,5 +53,19 @@ void main() {
       expect(motion.isJumping, isFalse);
       expect(motion.isSliding, isTrue);
     });
+
+    test('buffers pre-landing jump input during final 30% of descent', () {
+      final motion = VerticalMotion(jumpDuration: 0.60);
+      expect(motion.jump(), isTrue);
+
+      motion.update(0.45); // 75% through jump arc (descending near ground)
+      expect(motion.isJumping, isTrue);
+      expect(motion.jump(), isFalse); // buffered, not double-jumped mid-air
+
+      motion.update(0.16); // crosses 100% touchdown -> auto-launches buffered jump!
+      expect(motion.isJumping, isTrue);
+      motion.update(0.28);
+      expect(motion.jumpHeight, greaterThan(0.9));
+    });
   });
 }

@@ -7,10 +7,8 @@ import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 import '../systems/power_up_system.dart';
 
-/// Collectible on-track Subway-style power-up emblem (S12):
-///  * [PowerUpKind.magnet] — cyan-gold solar attractor ring;
-///  * [PowerUpKind.multiplier2x] — blazing 2x sun crest;
-///  * [PowerUpKind.solarDash] — winged golden sky-comet.
+/// Collectible on-track Subway-style power-up emblem (S13: horizon-queued with
+/// smooth `1 / Z` projection).
 class PowerUpPickup extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   PowerUpPickup({
@@ -30,7 +28,7 @@ class PowerUpPickup extends PositionComponent
   Future<void> onLoad() async {
     await super.onLoad();
     anchor = Anchor.center;
-    final width = game.size.x * GameConfig.entityWidthRatio * 0.95;
+    final width = game.size.x * GameConfig.entityWidthRatio * 0.90;
     size = Vector2.all(width);
     _applyProjection();
   }
@@ -41,9 +39,9 @@ class PowerUpPickup extends PositionComponent
     _phase += dt * 4.5;
     _depth -= (game.currentSpeed / GameConfig.trackLength) * dt;
 
-    if (!_collected && _depth <= 0.08 && _depth >= -0.06) {
+    if (!_collected && _depth <= 0.075 && _depth >= -0.055) {
       final laneDiff = (game.player.currentLane - lane).abs();
-      if (laneDiff < 0.62) {
+      if (laneDiff < 0.56) {
         _collected = true;
         game.onPowerUpCollected(kind, position.clone());
         removeFromParent();
@@ -51,7 +49,7 @@ class PowerUpPickup extends PositionComponent
       }
     }
 
-    if (_depth <= -0.14) {
+    if (_depth <= -0.15) {
       removeFromParent();
       return;
     }
@@ -59,13 +57,18 @@ class PowerUpPickup extends PositionComponent
   }
 
   void _applyProjection() {
-    final bob = math.sin(_phase) * size.y * 0.06;
+    if (_depth > 1.02) {
+      scale = Vector2.zero();
+      return;
+    }
+    final sc = game.scaleForDepth(_depth);
+    final bob = math.sin(_phase) * size.y * 0.06 * sc;
     position = Vector2(
       game.laneXForDepth(lane.toDouble(), _depth),
-      game.yForDepth(_depth) - size.y * 0.22 + bob,
+      game.yForDepth(_depth) - size.y * 0.34 * sc + bob,
     );
-    scale = Vector2.all(game.scaleForDepth(_depth));
-    priority = (6 + (1.0 - _depth) * 18).round();
+    scale = Vector2.all(sc);
+    priority = (6 + (1.0 - _depth).clamp(0.0, 1.0) * 16).round();
   }
 
   Color get _accentColor {
@@ -93,50 +96,49 @@ class PowerUpPickup extends PositionComponent
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    if (_depth > 1.02) {
+      return;
+    }
     final w = size.x;
     final c = Offset(w / 2, w / 2);
     final pulse = 1 + math.sin(_phase * 1.3) * 0.08;
     final accent = _accentColor;
+    final horizonAlpha = ((1.02 - _depth) / 0.10).clamp(0.0, 1.0);
 
-    // Outer additive beacon halo.
     canvas.drawCircle(
       c,
-      w * 0.52 * pulse,
+      w * 0.50 * pulse,
       Paint()
-        ..color = accent.withValues(alpha: 0.34)
+        ..color = accent.withValues(alpha: 0.32 * horizonAlpha)
         ..blendMode = BlendMode.plus,
     );
 
-    // Dark twilight diamond medallion with bright rim.
-    final r = w * 0.36 * pulse;
+    final r = w * 0.35 * pulse;
     final diamond = Path()
       ..moveTo(c.dx, c.dy - r)
       ..lineTo(c.dx + r, c.dy)
       ..lineTo(c.dx, c.dy + r)
       ..lineTo(c.dx - r, c.dy)
       ..close();
-    canvas.drawPath(diamond, Paint()..color = const Color(0xEE1A1030));
     canvas.drawPath(
       diamond,
       Paint()
-        ..color = accent
+        ..color = const Color(0xEE1A1030).withValues(alpha: 0.92 * horizonAlpha),
+    );
+    canvas.drawPath(
+      diamond,
+      Paint()
+        ..color = accent.withValues(alpha: horizonAlpha)
         ..style = PaintingStyle.stroke
         ..strokeWidth = w * 0.055,
-    );
-    canvas.drawCircle(
-      c,
-      r * 0.72,
-      Paint()
-        ..color = const Color(0xFFFFE082).withValues(alpha: 0.22)
-        ..blendMode = BlendMode.plus,
     );
 
     final tp = TextPainter(
       text: TextSpan(
         text: _glyph,
         style: TextStyle(
-          color: const Color(0xFFFFF3D1),
-          fontSize: w * 0.30,
+          color: const Color(0xFFFFF3D1).withValues(alpha: horizonAlpha),
+          fontSize: w * 0.29,
           fontWeight: FontWeight.w900,
         ),
       ),

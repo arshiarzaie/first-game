@@ -7,10 +7,10 @@ import '../../game/soul_dusk_run_game.dart';
 import '../overlays/game_over_overlay.dart';
 import '../overlays/pause_overlay.dart';
 
-/// Hosts the Flame game, 4-way Subway-tier gesture routing (swipe left/right,
-/// swipe up to jump, swipe down to slide/fast-fall, plus tap-halves),
-/// polished HUD badges, active power-up timers, and the Solar Aegis shield
-/// button (S12).
+/// Hosts the Flame game, instant zero-lag 4-way Subway-tier pointer routing
+/// (swipe left/right, swipe up to jump, swipe down to slide/fast-fall,
+/// chainable L-swipes, and crisp stationary tap-halves), HUD badges, active
+/// power-up timers, and the Solar Aegis shield button (S13).
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, this.world = GameWorld.duskHollow});
 
@@ -32,6 +32,8 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       onMove: _game.moveLane,
       onJump: _game.jump,
       onSlide: _game.slide,
+      isRunStarted: () => _game.isRunStarted,
+      onStartRun: _game.startRun,
     );
     WidgetsBinding.instance.addObserver(this);
   }
@@ -60,36 +62,51 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragEnd: (details) {
-              if (!_game.isRunStarted) {
-                _game.startRun();
-                return;
-              }
-              _gestures.onHorizontalDragEnd(details.primaryVelocity ?? 0.0);
-            },
-            onVerticalDragEnd: (details) {
-              if (!_game.isRunStarted) {
-                _game.startRun();
-                return;
-              }
-              _gestures.onVerticalDragEnd(details.primaryVelocity ?? 0.0);
-            },
-            onTapUp: (details) {
-              if (!_game.isRunStarted) {
-                _game.startRun();
-                return;
-              }
-              _gestures.onTapUp(
-                details.localPosition.dx,
-                constraints.maxWidth,
-              );
-            },
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                GameWidget<SoulDuskRunGame>(
+          final screenWidth = constraints.maxWidth;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              // Instant pointer listener wraps GameWidget underneath HUD
+              // controls so Pause / Solar Shield buttons absorb their own taps
+              // while gameplay swipes fire with 0ms finger-lift delay.
+              Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (event) {
+                  if (_game.paused || _game.isEnded) {
+                    return;
+                  }
+                  _gestures.onPointerDown(
+                    event.pointer,
+                    event.localPosition.dx,
+                    event.localPosition.dy,
+                  );
+                },
+                onPointerMove: (event) {
+                  if (_game.paused || _game.isEnded) {
+                    return;
+                  }
+                  _gestures.onPointerMove(
+                    event.pointer,
+                    event.localPosition.dx,
+                    event.localPosition.dy,
+                  );
+                },
+                onPointerUp: (event) {
+                  if (_game.paused || _game.isEnded) {
+                    _gestures.onPointerCancel(event.pointer);
+                    return;
+                  }
+                  _gestures.onPointerUp(
+                    event.pointer,
+                    event.localPosition.dx,
+                    event.localPosition.dy,
+                    screenWidth,
+                  );
+                },
+                onPointerCancel: (event) {
+                  _gestures.onPointerCancel(event.pointer);
+                },
+                child: GameWidget<SoulDuskRunGame>(
                   game: _game,
                   errorBuilder: (context, error) => Material(
                     color: const Color(0xFF140D26),
@@ -117,55 +134,55 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         PauseOverlay(onResume: game.resumeFromMenu),
                   },
                 ),
+              ),
 
-                // Top HUD pills + pre-start prompt + Solar Aegis shield CTA.
-                ValueListenableBuilder<int>(
-                  valueListenable: _game.hudTick,
-                  builder: (context, _, _) {
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Positioned(
-                          top: topPad + 12,
-                          left: 14,
-                          right: 60,
-                          child: IgnorePointer(
-                            child: _TopHudBar(game: _game),
+              // Top HUD pills + pre-start prompt + Solar Aegis shield CTA.
+              ValueListenableBuilder<int>(
+                valueListenable: _game.hudTick,
+                builder: (context, _, _) {
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned(
+                        top: topPad + 12,
+                        left: 14,
+                        right: 60,
+                        child: IgnorePointer(
+                          child: _TopHudBar(game: _game),
+                        ),
+                      ),
+                      if (!_game.isRunStarted && !_game.isEnded)
+                        const IgnorePointer(
+                          child: Align(
+                            alignment: Alignment(0, 0.16),
+                            child: _StartPromptBanner(),
                           ),
                         ),
-                        if (!_game.isRunStarted && !_game.isEnded)
-                          const IgnorePointer(
-                            child: Align(
-                              alignment: Alignment(0, 0.16),
-                              child: _StartPromptBanner(),
-                            ),
-                          ),
-                        if (_game.isRunStarted && !_game.isEnded)
-                          Positioned(
-                            right: 16,
-                            bottom: bottomPad + 22,
-                            child: _SolarShieldButton(game: _game),
-                          ),
-                      ],
-                    );
-                  },
-                ),
+                      if (_game.isRunStarted && !_game.isEnded)
+                        Positioned(
+                          right: 16,
+                          bottom: bottomPad + 22,
+                          child: _SolarShieldButton(game: _game),
+                        ),
+                    ],
+                  );
+                },
+              ),
 
-                Positioned(
-                  top: topPad + 8,
-                  right: 8,
-                  child: IconButton(
-                    tooltip: 'Pause',
-                    onPressed: _game.pauseWithMenu,
-                    icon: const Icon(
-                      Icons.pause_rounded,
-                      color: Color(0xFFF6E7C8),
-                      size: 30,
-                    ),
+              Positioned(
+                top: topPad + 8,
+                right: 8,
+                child: IconButton(
+                  tooltip: 'Pause',
+                  onPressed: _game.pauseWithMenu,
+                  icon: const Icon(
+                    Icons.pause_rounded,
+                    color: Color(0xFFF6E7C8),
+                    size: 30,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
@@ -190,7 +207,7 @@ class _TopHudBar extends StatelessWidget {
           runSpacing: 6,
           children: [
             _HudPill(
-              borderColor: const Color(0x664DD8FF),
+              borderColor: const Color(0x669E6BFF),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

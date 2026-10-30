@@ -1,10 +1,13 @@
 import '../config/game_config.dart';
 
-/// Pure-Dart vertical kinetics for Soul (S12 Subway-tier 4-way controls).
+/// Pure-Dart vertical kinetics for Soul (S13 Subway-tier 4-way controls +
+/// pre-landing jump input buffer).
 ///
 /// Supports:
 ///  * Parabolic jump (`jump()`) with normalized height in `[0, 1]`;
-///  * Ground tuck-slide (`slide()`) to duck underneath overhead arches;
+///  * Pre-landing jump buffering: swiping Up during the final 30% of descent
+///    queues an immediate rebound jump on touchdown instead of dropping input;
+///  * Ground tuck-slide (`slide()`) to duck underneath overhead rune gates;
 ///  * Slide-cancel into jump (swiping up while sliding launches immediately);
 ///  * Mid-air fast-fall slam (`slide()` while airborne drops rapidly and
 ///    chains straight into a ground slide upon landing).
@@ -26,6 +29,7 @@ class VerticalMotion {
   bool _jumping = false;
   bool _fastFalling = false;
   bool _queuedSlide = false;
+  bool _queuedJump = false;
   double _slideRemaining = 0;
 
   bool get isJumping => _jumping;
@@ -47,13 +51,19 @@ class VerticalMotion {
   /// True while crouched on the ground underneath overhead arch barriers.
   bool get isDuckingHigh => isSliding;
 
-  /// Triggers a jump (cancelling an active ground slide if needed).
+  /// Triggers a jump (cancelling an active ground slide if needed), or queues
+  /// an instant rebound jump if Soul is near touchdown (`progress >= 0.70`).
   bool jump() {
     if (_jumping) {
+      if (_jumpProgress >= 0.70) {
+        _queuedJump = true;
+        _queuedSlide = false;
+      }
       return false;
     }
     _slideRemaining = 0;
     _queuedSlide = false;
+    _queuedJump = false;
     _fastFalling = false;
     _jumping = true;
     _jumpProgress = 0;
@@ -62,11 +72,10 @@ class VerticalMotion {
 
   /// Triggers a ground slide, or a fast-fall slam + landing slide if airborne.
   void slide() {
+    _queuedJump = false;
     if (_jumping) {
       _fastFalling = true;
       _queuedSlide = true;
-      // Ensure we are on the descending half or accelerate past the apex so
-      // the slam feels immediate.
       if (_jumpProgress < 0.5) {
         _jumpProgress = 1.0 - _jumpProgress;
       }
@@ -86,7 +95,12 @@ class VerticalMotion {
         _jumping = false;
         _jumpProgress = 0;
         _fastFalling = false;
-        if (_queuedSlide) {
+        if (_queuedJump) {
+          _queuedJump = false;
+          _queuedSlide = false;
+          _jumping = true;
+          _jumpProgress = 0;
+        } else if (_queuedSlide) {
           _queuedSlide = false;
           _slideRemaining = slideDuration;
         }
@@ -106,6 +120,7 @@ class VerticalMotion {
     _jumpProgress = 0;
     _fastFalling = false;
     _queuedSlide = false;
+    _queuedJump = false;
     _slideRemaining = 0;
   }
 }

@@ -21,12 +21,12 @@ import 'systems/progress_store.dart';
 import 'systems/score_manager.dart';
 import 'systems/vertical_motion.dart';
 
-/// Flame game root for SOUL: DUSK RUN (S12 Subway-tier runner).
+/// Flame game root for SOUL: DUSK RUN (S13 True-1/Z 3D Subway-tier overhaul).
 ///
-/// Owns run state, 4-way movement (lane switch + parabolic jump + tuck-slide
-/// + mid-air fast-fall), seeded multi-archetype obstacle waves, flowing
-/// sun-orb trails & jump arcs, Subway-style power-ups + Solar Aegis crash
-/// shield, and shared 2.5D world-to-screen projection.
+/// Owns run state, instant 4-way movement (lane glide + buffered parabolic jump
+/// + parkour tuck-slide + mid-air fast-fall), fair multi-archetype obstacle
+/// waves, horizon-queued sun-orb trails & jump arcs, Subway-style power-ups +
+/// Solar Aegis crash shield, and unified true `1 / Z` 3D camera projection.
 class SoulDuskRunGame extends FlameGame {
   SoulDuskRunGame({int seed = 0, this.selectedWorld = GameWorld.duskHollow})
       : _seed = seed;
@@ -38,23 +38,20 @@ class SoulDuskRunGame extends FlameGame {
 
   final int _seed;
 
-  // Pure-Dart gameplay systems (unit-tested in isolation).
   final LaneSystem laneSystem = LaneSystem();
   final VerticalMotion verticalMotion = VerticalMotion();
   final PowerUpSystem powerUps = PowerUpSystem();
   final DifficultyManager difficulty = const DifficultyManager();
   final ScoreManager score = ScoreManager();
 
-  /// Notifies the Flutter HUD layer whenever score, orbs, run-start, or
-  /// power-up timers update.
   final ValueNotifier<int> hudTick = ValueNotifier<int>(0);
 
   late SeededObstacleGenerator _generator;
   late final SoulPlayer player;
 
-  // Pre-decoded production art assets (null until loaded; components render
-  // crisp canvas fallbacks whenever an asset is unavailable).
   ui.Image? soulSprite;
+  ui.Image? soulJumpSprite;
+  ui.Image? soulSlideSprite;
   ui.Image? worldBackdrop;
   ui.Image? trackStrip;
   ui.Image? corridorPillar;
@@ -91,33 +88,39 @@ class SoulDuskRunGame extends FlameGame {
         : base;
   }
 
-  /// Normalized vertical elevation of Soul in `[0, 1]` (accounts for both
-  /// jumps and airborne Sunburst Sky-Dash).
+  /// Normalized vertical elevation of Soul in `[0, 1]`.
   double get effectivePlayerElevation =>
       powerUps.isSolarDashing ? 0.92 : verticalMotion.jumpHeight;
 
   // ---------------------------------------------------------------
-  // 2.5D projection helpers (shared by the scene and all entities).
-  // Depth 1 = horizon, depth 0 = player plane, depth < 0 = foreground
-  // passing the camera towards the bottom screen edge.
+  // Unified True 1/Z Pinhole 3D Camera Projection (S13).
+  // Depth 1 = far horizon (`Z = farDepthRatio`), depth 0 = Soul's plane
+  // (`Z = 1`), depth < 0 = foreground passing beneath the camera.
+  // Because `halfWidthForDepth` and `scaleForDepth` share the exact same
+  // `1 / Z` factor, lane width, paver size, and obstacle width remain 100%
+  // proportionally locked at every distance with zero foreground distortion.
   // ---------------------------------------------------------------
 
   double get horizonY => size.y * GameConfig.horizonRatio;
   double get playerPlaneY => size.y * GameConfig.playerPlaneRatio;
 
-  double _approach(double depth) {
-    final linear = (1.0 - depth).clamp(0.0, 1.35).toDouble();
-    return math.pow(linear, GameConfig.perspectiveExponent).toDouble();
+  /// True `1 / Z` perspective factor (`1.0` at Soul's plane, `farScale` at
+  /// `depth = 1.0`).
+  double perspectiveFactor(double depth) {
+    final z =
+        (1.0 + depth * (GameConfig.farDepthRatio - 1.0)).clamp(0.68, 12.0);
+    return 1.0 / z;
   }
 
-  double yForDepth(double depth) =>
-      horizonY + (playerPlaneY - horizonY) * _approach(depth);
-
-  double halfWidthForDepth(double depth) {
-    final top = size.x * GameConfig.trackTopHalfWidthRatio;
-    final bottom = size.x * GameConfig.trackBottomHalfWidthRatio;
-    return top + (bottom - top) * _approach(depth);
+  double yForDepth(double depth) {
+    const pFar = GameConfig.farScale;
+    final p = perspectiveFactor(depth);
+    final t = (p - pFar) / (1.0 - pFar);
+    return horizonY + (playerPlaneY - horizonY) * t;
   }
+
+  double halfWidthForDepth(double depth) =>
+      size.x * GameConfig.trackBottomHalfWidthRatio * perspectiveFactor(depth);
 
   double laneXForDepth(double lane, double depth) {
     final center = (GameConfig.laneCount - 1) / 2;
@@ -128,11 +131,7 @@ class SoulDuskRunGame extends FlameGame {
 
   double laneXOnPlayerPlane(double lane) => laneXForDepth(lane, 0);
 
-  double scaleForDepth(double depth) {
-    final linear = (1.0 - depth).clamp(0.0, 1.35).toDouble();
-    final eased = math.pow(linear, GameConfig.scaleExponent).toDouble();
-    return GameConfig.farScale + (1 - GameConfig.farScale) * eased;
-  }
+  double scaleForDepth(double depth) => perspectiveFactor(depth);
 
   // --------------------------------------------------------------- lifecycle
 
@@ -168,6 +167,11 @@ class SoulDuskRunGame extends FlameGame {
       debugPrint('Soul sprite unavailable ($error). Using fallback.');
       soulSprite = null;
     }
+    soulJumpSprite =
+        await _tryLoadImage(GameConfig.soulJumpSpriteKey, 'Soul jump pose');
+    soulSlideSprite =
+        await _tryLoadImage(GameConfig.soulSlideSpriteKey, 'Soul slide pose');
+
     final trackKey = GameConfig.trackStripKeyFor(selectedWorld);
     trackStrip = trackKey == null
         ? null
@@ -220,11 +224,11 @@ class SoulDuskRunGame extends FlameGame {
 
     if (powerUps.isSolarDashing) {
       _dashOrbTimer += dt;
-      if (_dashOrbTimer >= 0.20) {
+      if (_dashOrbTimer >= 0.18) {
         _dashOrbTimer = 0;
         add(EnergyOrb(
           lane: laneSystem.lane,
-          initialDepth: 0.96,
+          initialDepth: 1.0,
           elevation: 0.92,
         ));
       }
@@ -296,8 +300,6 @@ class SoulDuskRunGame extends FlameGame {
     return activated;
   }
 
-  /// Called when Soul collides with a non-cleared obstacle. Returns true if
-  /// Solar Aegis absorbed and shattered the obstacle; false if the run ends.
   bool onObstacleImpact(Vector2 impactCenter) {
     if (_ended) {
       return false;
@@ -309,6 +311,13 @@ class SoulDuskRunGame extends FlameGame {
     }
     onPlayerHit();
     return false;
+  }
+
+  void onNearMissSpark(Vector2 grazePoint) {
+    if (_ended) {
+      return;
+    }
+    add(VfxBurst.orbCollect(grazePoint));
   }
 
   void onPlayerHit() {
@@ -350,9 +359,17 @@ class SoulDuskRunGame extends FlameGame {
     _distanceSinceWave = 0;
     _distanceToNextWave = wave.distanceToNext;
 
+    // Obstacles spawn slightly behind depth 1.0 (at 1.08) and fade smoothly
+    // across the horizon line so jump-arc orbs spanning [1.00..1.16] stay
+    // centered directly above the low barrier with zero mid-track pop-in!
+    const waveCoreDepth = 1.08;
     if (!powerUps.isSolarDashing) {
       for (final lane in wave.blockedLanes) {
-        add(Obstacle(lane: lane, kind: wave.kindForLane(lane)));
+        add(Obstacle(
+          lane: lane,
+          kind: wave.kindForLane(lane),
+          initialDepth: waveCoreDepth,
+        ));
       }
     }
 
@@ -361,7 +378,7 @@ class SoulDuskRunGame extends FlameGame {
       for (var i = 0; i < wave.orbTrailCount; i++) {
         add(EnergyOrb(
           lane: orbLane,
-          initialDepth: 1.0 + i * 0.065,
+          initialDepth: 1.00 + i * 0.055,
         ));
       }
     }
@@ -373,8 +390,8 @@ class SoulDuskRunGame extends FlameGame {
         final t = i / (arcCount - 1);
         add(EnergyOrb(
           lane: arcLane,
-          initialDepth: 0.87 + i * 0.065,
-          elevation: math.sin(t * math.pi) * 1.05,
+          initialDepth: 1.00 + i * 0.04,
+          elevation: math.sin(t * math.pi) * 1.02,
         ));
       }
     }
@@ -383,7 +400,7 @@ class SoulDuskRunGame extends FlameGame {
       add(PowerUpPickup(
         lane: wave.powerUpLane!,
         kind: wave.powerUpKind!,
-        initialDepth: 1.06,
+        initialDepth: 1.12,
       ));
     }
   }

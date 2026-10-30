@@ -79,10 +79,23 @@ void main() {
       }
     });
 
-    test('minGapFor scales with speed', () {
+    test('minGapFor scales with speed and guarantees >=1.0s post-jump spacing',
+        () {
       final generator = SeededObstacleGenerator();
       expect(generator.minGapFor(640), greaterThan(generator.minGapFor(240)));
-      expect(generator.minGapFor(0 + 1), greaterThan(0));
+      expect(generator.minGapFor(300) / 300, greaterThanOrEqualTo(1.0));
+    });
+
+    test('two-lane waves never place two impassable tallMonoliths side by side',
+        () {
+      final generator = SeededObstacleGenerator(seed: 99);
+      for (var i = 0; i < 400; i++) {
+        final wave = generator.nextWave(speed: 520, difficulty: 1.0);
+        final monolithCount = wave.blockedLanes
+            .where((l) => wave.kindForLane(l) == ObstacleKind.tallMonolith)
+            .length;
+        expect(monolithCount, lessThanOrEqualTo(1));
+      }
     });
   });
 }

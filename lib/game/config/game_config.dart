@@ -13,15 +13,15 @@ class GameConfig {
   static const int initialLane = 1;
 
   // ---- Speed / difficulty ----
-  /// Forward speed in world units per second at run start (S12: raised from
-  /// 240 for brisker Subway-style initial pacing).
-  static const double startSpeed = 310;
+  /// Forward speed in world units per second at run start (S13: smooth,
+  /// readable Subway-grade initial cadence under true 1/Z perspective).
+  static const double startSpeed = 295;
 
   /// Hard upper cap for forward speed. Never exceeded.
-  static const double maxSpeed = 680;
+  static const double maxSpeed = 640;
 
   /// Speed gained per second of survival.
-  static const double speedRampPerSecond = 9.5;
+  static const double speedRampPerSecond = 8.0;
 
   // ---- World geometry ----
   /// Abstract depth length of the track in world units. Entities spawn at
@@ -30,22 +30,22 @@ class GameConfig {
 
   // ---- Spawning fairness ----
   /// Human reaction time budget (seconds) reserved before maneuvering.
-  static const double reactionTimeSeconds = 0.45;
+  static const double reactionTimeSeconds = 0.48;
 
-  /// Time needed for one lane switch (seconds). Used for fairness spacing.
-  static const double laneSwitchSeconds = 0.14;
+  /// Time needed for one lane switch (seconds). Snappy instant lane glide.
+  static const double laneSwitchSeconds = 0.13;
 
   /// Chance (at difficulty 0) that a wave blocks two lanes instead of one.
-  static const double twoLaneBlockBaseChance = 0.28;
+  static const double twoLaneBlockBaseChance = 0.24;
 
   /// Chance (at difficulty 1) that a wave blocks two lanes instead of one.
-  static const double twoLaneBlockMaxChance = 0.68;
+  static const double twoLaneBlockMaxChance = 0.66;
 
   /// Chance that a wave also spawns a flowing energy-orb trail on a free lane.
-  static const double orbChance = 0.78;
+  static const double orbChance = 0.82;
 
   /// Initial distance before the first wave spawns (lets the run settle in).
-  static const double firstWaveDistance = 420;
+  static const double firstWaveDistance = 440;
 
   // ---- Score ----
   /// Points per world unit travelled.
@@ -54,69 +54,73 @@ class GameConfig {
   /// Flat score for one collected orb.
   static const int orbScore = 10;
 
-  // ---- 2.5D projection ----
+  // ---- True 1/Z 3D Pinhole Camera Projection (S13) ----
+  /// Ratio of 3D camera distance at the horizon (`depth = 1`) to Soul's
+  /// player plane (`depth = 0`). Governs unified `1 / Z` foreshortening so
+  /// road width, entity scale, and stone paver density stay 1:1 locked from
+  /// horizon to screen bottom without foreground stretching.
+  static const double farDepthRatio = 4.8;
+
   /// Vertical position of the horizon line as a fraction of screen height.
-  static const double horizonRatio = 0.30;
+  static const double horizonRatio = 0.34;
 
   /// Vertical position of the player plane as a fraction of screen height.
-  static const double playerPlaneRatio = 0.86;
+  static const double playerPlaneRatio = 0.84;
 
-  /// Entity scale at the horizon (depth 1).
-  static const double farScale = 0.16;
+  /// Entity scale at the horizon (`depth = 1`), equal to `1 / farDepthRatio`.
+  static const double farScale = 1.0 / farDepthRatio;
 
-  /// Half-width of the track at the horizon, as a fraction of screen width.
-  /// S11: tuned to 0.11 so the causeway converges cleanly into the distant
-  /// horizon arch/bridge across all worlds.
-  static const double trackTopHalfWidthRatio = 0.11;
+  /// Half-width of the track on the player plane (`depth = 0`), as a
+  /// fraction of screen width. Extrapolates cleanly along `1 / Z` to ~0.55w
+  /// at the bottom screen edge so raised stone parapets & lantern pylons
+  /// stay framed on both sides.
+  static const double trackBottomHalfWidthRatio = 0.45;
 
-  /// Half-width of the track on the player plane (depth 0, y = 0.86h), as
-  /// a fraction of screen width. S11: widened to 0.54 (which extrapolates
-  /// along the same straight cone to ~0.65w at the bottom screen edge) so
-  /// the runway fills the lower frame in Subway-style framing while
-  /// keeping lane geometry and entity projection 1:1 locked.
-  static const double trackBottomHalfWidthRatio = 0.54;
+  /// Half-width of the track at the horizon (`depth = 1`), exact `1 / Z`
+  /// foreshortening of [trackBottomHalfWidthRatio].
+  static const double trackTopHalfWidthRatio =
+      trackBottomHalfWidthRatio / farDepthRatio;
+
+  /// Number of seamless vertical repeats of `track_strip.png` (`1024x2048`)
+  /// per [trackLength] so foreground stone pavers stay >=1:1 crisp on 1080p+
+  /// screens instead of stretching near Soul.
+  static const double trackTileRepeats = 3.0;
 
   /// Lane center offset from track center as a fraction of current
-  /// half-width (lane N sits at (N - 1) * this value for 3 lanes).
-  /// S11: 0.65 aligns gameplay lanes within <1%w of the painted 1/3-2/3
-  /// stone lane centers across all depths without outer-edge clipping.
-  static const double laneSpreadRatio = 0.65;
+  /// half-width. Matches the exact lane centers `(216, 512, 808) / 1024`
+  /// between the 68px outer stone curbs of `track_strip.png` (`296 / 512`).
+  static const double laneSpreadRatio = 0.578125;
 
-  /// Exponent of the depth->screen easing curve (>1 = slow far, fast near).
-  static const double perspectiveExponent = 2.0;
+  // ---- Entity sizing & forgiving hitboxes ----
+  /// Player body width as a fraction of screen width.
+  static const double playerWidthRatio = 0.26;
 
-  /// Scale easing exponent (gentler than the vertical easing).
-  static const double scaleExponent = 1.3;
-
-  // ---- Entity sizing ----
-  /// Player body width as a fraction of screen width (S10: raised again
-  /// from 0.21 — on-device reads still showed the sun-head cycle small;
-  /// fairness unchanged — hitbox keeps the same 0.78 grace factor and
-  /// the inter-lane clearance still exceeds the summed widths).
-  static const double playerWidthRatio = 0.25;
-
-  /// Obstacle/orb base width as a fraction of screen width (S10: raised
-  /// with the player so entities stay proportional to the hero).
-  static const double entityWidthRatio = 0.19;
+  /// Obstacle/orb base width as a fraction of screen width.
+  static const double entityWidthRatio = 0.21;
 
   /// Hitbox size relative to the visual size (grace margin for fairness).
-  static const double hitboxFactor = 0.78;
+  static const double hitboxFactor = 0.72;
 
-  // ---- S12: 4-way vertical kinetics & Subway-tier power-ups ----
+  /// Maximum `|playerLane - obstacleLane|` that registers a solid collision
+  /// (Subway-style forgiving corner-dodge threshold).
+  static const double collisionLaneThreshold = 0.36;
+
+  // ---- 4-way vertical kinetics & Subway-tier power-ups ----
   /// Total duration of one full parabolic jump arc (seconds).
   static const double jumpDurationSeconds = 0.62;
 
-  /// Normalized jump height (0..1) above which low ground spikes are cleared.
-  static const double jumpClearThreshold = 0.28;
+  /// Normalized jump height (0..1) above which low crystal barriers are
+  /// cleared (~89% of the jump arc clears cleanly).
+  static const double jumpClearThreshold = 0.20;
 
   /// Peak jump lift on screen as a fraction of screen height.
-  static const double jumpHeightRatio = 0.18;
+  static const double jumpHeightRatio = 0.17;
 
   /// Descent speed multiplier when swiping down mid-air (fast-fall slam).
-  static const double fastFallMultiplier = 3.6;
+  static const double fastFallMultiplier = 3.8;
 
-  /// Duration of a ground tuck-slide / roll under overhead arches (seconds).
-  static const double slideDurationSeconds = 0.52;
+  /// Duration of a ground tuck-slide under overhead rune gates (seconds).
+  static const double slideDurationSeconds = 0.54;
 
   /// Active duration of the crash-absorbing Solar Aegis shield (seconds).
   static const double solarShieldDuration = 8.0;
@@ -136,14 +140,13 @@ class GameConfig {
   /// Forward speed boost factor while Sunburst Sky-Dash is active.
   static const double solarDashSpeedBoost = 1.55;
 
-  // ---- Presentation (P2 visual prototype) ----
-  /// Bundle path of the Soul hero sprite. The PNG is rendered on a pure
-  /// magenta plate; lib/game/presentation/chroma_key.dart converts that
-  /// plate to real alpha at load time and crops to the character.
+  // ---- Presentation assets ----
   static const String soulSpriteAsset = 'assets/images/soul/soul_hero.png';
+  static const String soulJumpSpriteKey = 'soul/jump.png';
+  static const String soulSlideSpriteKey = 'soul/slide.png';
 
   /// Flame `images` cache keys for baked-alpha prop sprites (relative to
-  /// `assets/images/` — Flame's default prefix).
+  /// `assets/images/`).
   static const String orbSpriteAsset = 'props/energy_orb.png';
   static const String obstacleSpriteAsset = 'props/obstacle_spikes.png';
   static const String obstacleArchSpriteAsset = 'props/obstacle_arch.png';
@@ -158,7 +161,6 @@ class GameConfig {
   static const String emberfallCanyonPillarKey =
       'worlds/emberfall_canyon/corridor_pillar.png';
 
-  /// Roadside corridor pillar sprite key per world.
   static String corridorPillarKeyFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
@@ -170,20 +172,13 @@ class GameConfig {
     }
   }
 
-  /// Flame `images` cache key for the Dusk Hollow backdrop (cache paths
-  /// are relative to `assets/images/`).
   static const String duskHollowBackdropKey =
       'worlds/dusk_hollow/backdrop.png';
-
-  /// Flame `images` cache key for the Moonveil Marsh backdrop (S4).
   static const String moonveilMarshBackdropKey =
       'worlds/moonveil_marsh/backdrop.png';
-
-  /// Flame `images` cache key for the Emberfall Canyon backdrop (S7).
   static const String emberfallCanyonBackdropKey =
       'worlds/emberfall_canyon/backdrop.png';
 
-  /// Perspective track surface strips (S8b/S8c) for every world.
   static const String duskHollowTrackStripKey =
       'worlds/dusk_hollow/track_strip.png';
   static const String moonveilMarshTrackStripKey =
@@ -191,7 +186,6 @@ class GameConfig {
   static const String emberfallCanyonTrackStripKey =
       'worlds/emberfall_canyon/track_strip.png';
 
-  /// Track strip per world (every world ships one).
   static String? trackStripKeyFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
@@ -203,15 +197,11 @@ class GameConfig {
     }
   }
 
-  /// Where the backdrop's painted horizon sits inside the image, as a
-  /// fraction of image height (tuned to the current asset; S2 backdrop
-  /// v2 carries its golden glow/citadel horizon at ~245/768).
-  static const double backdropHorizonFraction = 0.319;
+  /// Painted horizon anchor inside our `1200x1000` portrait sky/horizon
+  /// backdrops (~685/1000 places the Citadel gate / Moon / Sunrise Mesa right
+  /// on `horizonY`).
+  static const double backdropHorizonFraction = 0.685;
 
-  // ---- World selection (S4) ----
-  /// Asset/palette resolver per world. Presentation values only — the
-  /// gameplay projection and difficulty numbers are identical in every
-  /// world.
   static String backdropKeyFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
@@ -223,9 +213,6 @@ class GameConfig {
     }
   }
 
-  /// Painted-horizon fraction of each world's backdrop (Moonveil's S4
-  /// backdrop is squeezed to carry its citadel/moon horizon at the same
-  /// ~245/768 mark as Dusk Hollow v2).
   static double backdropHorizonFractionFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
@@ -235,58 +222,67 @@ class GameConfig {
     }
   }
 
-  /// Semi-transparent track fill per world (values carry the Dusk Hollow
-  /// teal tint vs the Moonveil deep-night teal tint).
+  /// Deep chasm & viaduct base tint per world (alpha > 0x40 per contract).
   static int trackFillArgbFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
-        return 0xB3241738;
+        return 0xCC22123A;
       case GameWorld.moonveilMarsh:
-        return 0xB30E2B32;
+        return 0xCC0C2630;
       case GameWorld.emberfallCanyon:
-        return 0xB3301D12;
+        return 0xCC2E1610;
     }
   }
 
-  /// Track edge glow per world.
+  /// Viaduct parapet / rim accent per world.
   static int trackEdgeArgbFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
-        return 0x884DD8FF;
+        return 0xAA9E6BFF;
       case GameWorld.moonveilMarsh:
-        return 0x886FDCD2;
+        return 0xAA5CE6D6;
       case GameWorld.emberfallCanyon:
-        return 0x88FF9F68;
+        return 0xAAFF9E52;
     }
   }
 
-  /// Lane divider glow per world.
+  /// Lane rune glow per world.
   static int trackLaneArgbFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
-        return 0x444DD8FF;
+        return 0x66FFD166;
       case GameWorld.moonveilMarsh:
-        return 0x446FDCD2;
+        return 0x667CF5E4;
       case GameWorld.emberfallCanyon:
-        return 0x44FF9F68;
+        return 0x66FFC46B;
     }
   }
 
-  /// Flowing depth-stripe color per world.
+  /// Flowing depth-stripe / masonry joint highlight per world.
   static int trackStripeArgbFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
-        return 0x44806FB8;
+        return 0x558B65C9;
       case GameWorld.moonveilMarsh:
-        return 0x448FBFC0;
+        return 0x5556B8B4;
       case GameWorld.emberfallCanyon:
-        return 0x44C97A4E;
+        return 0x55C97448;
+    }
+  }
+
+  /// Lantern aura color per world.
+  static int lanternAuraArgbFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 0xFFFFC857;
+      case GameWorld.moonveilMarsh:
+        return 0xFF64FFDA;
+      case GameWorld.emberfallCanyon:
+        return 0xFFFF8F00;
     }
   }
 
   // ---- World unlocking (S8) ----
-  /// Total collected suns (energy orbs banked across all runs at run
-  /// end) required before a world unlocks. Dusk Hollow is always open.
   static int worldUnlockSunsFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
@@ -298,42 +294,18 @@ class GameConfig {
     }
   }
 
-  /// Gentle idle float of the world backdrop, in px (world breathing).
-  static const double backdropDriftAmplitude = 5;
+  static const double backdropDriftAmplitude = 4;
+  static const double cameraSwayPerLane = 8;
+  static const int ambientParticleCount = 20;
+  static const double playerBobRatio = 0.035;
+  static const double playerLeanAngle = 0.14;
 
-  /// Camera sway (px of backdrop shift) per lane of player offset — a
-  /// subtle parallax cue that reinforces the elevated ¾ camera.
-  static const double cameraSwayPerLane = 7;
-
-  /// Count of ambient luminous motes drifting over the valley.
-  static const int ambientParticleCount = 16;
-
-  /// Player idle bob amplitude as a fraction of player height.
-  static const double playerBobRatio = 0.045;
-
-  /// Max roll angle (radians per lane of slide) while switching lanes.
-  static const double playerLeanAngle = 0.16;
-
-  // ---- Soul run-cycle animation (P3B) ----
-  /// Flame `images` cache key prefix for the pre-keyed run frames; files
-  /// are `frame_01.png` … `frame_08.png` under `assets/images/soul/run/`.
+  // ---- Soul run-cycle animation ----
   static const String runFramesPrefix = 'soul/run/frame_';
-
-  /// Number of frames in the approved run cycle.
   static const int runFrameCount = 8;
-
-  /// Playback rate of the run cycle.
-  static const double runCycleFps = 12;
-
-  /// Frame index shown while Soul stands idle awaiting the first tap
-  /// (frame 2 = weight-down pose: upright, both feet planted).
+  static const double runCycleFps = 14;
   static const int runIdleFrame = 1;
-
-  /// Extra fit factor for run frames. The P3C frames hold the chibi
-  /// humanoid silhouette at ≈ 76–82% of the 512×512 plate height (vs ≈
-  /// 53% for the retired ball-design frames → boost scale ≈53/80); this
-  /// boost normalizes the drawn silhouette to the established hero size.
-  static const double runCycleFitBoost = 1.26;
+  static const double runCycleFitBoost = 1.18;
 }
 
 /// Playable worlds. World choice changes assets/palette only — never

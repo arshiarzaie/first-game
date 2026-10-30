@@ -3,10 +3,10 @@ import 'dart:math';
 import '../config/game_config.dart';
 import 'power_up_system.dart';
 
-/// Obstacle archetype (S12 Subway-tier vertical decision matrix):
-///  * [lowSpikes]: ground shadow crystals — switch lanes OR jump over;
-///  * [highArch]: overhead crystal beam — switch lanes OR slide under;
-///  * [tallMonolith]: full-height obsidian pillar — must switch lanes.
+/// Obstacle archetype (S13 Subway-tier vertical decision matrix):
+///  * [lowSpikes]: low faceted crystal barricade — switch lanes OR jump over;
+///  * [highArch]: overhead rune portal gate — switch lanes OR slide under;
+///  * [tallMonolith]: towering stone obelisk — must switch lanes.
 enum ObstacleKind {
   lowSpikes,
   highArch,
@@ -16,14 +16,10 @@ enum ObstacleKind {
 /// One spawn wave.
 ///
 /// [blockedLanes] is the set of lane indices occupied by obstacles.
-/// The fairness invariant `blockedLanes.length < laneCount` always holds,
-/// so at least one lane is completely unobstructed in every wave.
-///
-/// [orbLane] optionally marks a free lane where a flowing trail of
-/// [orbTrailCount] energy orbs spawns; it is never a blocked lane.
-///
-/// [jumpArcLane] optionally marks a [ObstacleKind.lowSpikes] lane topped
-/// with a parabolic arc of airborne orbs rewarding a timed jump.
+/// Fairness invariants:
+///  1. `blockedLanes.length < laneCount` always holds (at least one open lane).
+///  2. A 2-lane wave never places two [ObstacleKind.tallMonolith] walls side by
+///     side — at least one blocked lane is vaultable or duckable.
 class SpawnWave {
   const SpawnWave({
     required this.blockedLanes,
@@ -64,20 +60,22 @@ class SeededObstacleGenerator {
   int _waveIndex = 0;
 
   /// Minimum forward distance between waves at [speed] so the player can
-  /// always perform the worst-case maneuver (laneCount - 1 lane switches)
-  /// plus the configured reaction time.
+  /// complete either a full jump arc OR worst-case lane switches AND still
+  /// have a full human reaction window before the next wave arrives (S13:
+  /// eliminates unavoidable post-jump Wave-2 collisions).
   double minGapFor(double speed) {
     assert(speed > 0, 'speed must be positive');
-    final worstCaseSwitches = laneCount - 1;
-    return speed *
-        (GameConfig.reactionTimeSeconds +
-            GameConfig.laneSwitchSeconds * worstCaseSwitches);
+    final worstCaseSwitches =
+        GameConfig.laneSwitchSeconds * (laneCount - 1);
+    final maneuverSeconds =
+        max(worstCaseSwitches, GameConfig.jumpDurationSeconds * 0.86);
+    return speed * (GameConfig.reactionTimeSeconds + maneuverSeconds);
   }
 
-  ObstacleKind _pickObstacleKind(double d) {
+  ObstacleKind _pickObstacleKind(double d, {required bool allowMonolith}) {
     final roll = _random.nextDouble();
-    final monolithChance = 0.14 + 0.24 * d;
-    final archChance = 0.28 + 0.10 * d;
+    final monolithChance = allowMonolith ? (0.12 + 0.24 * d) : 0.0;
+    final archChance = 0.30 + 0.10 * d;
     if (roll < monolithChance) {
       return ObstacleKind.tallMonolith;
     }
@@ -94,11 +92,13 @@ class SeededObstacleGenerator {
 
     final blocked = <int>{_random.nextInt(laneCount)};
 
+    // Gentle onboarding on Wave 1 at low difficulty so the run settles cleanly.
+    final canBlockTwo = laneCount > 2 && !(_waveIndex == 1 && d < 0.15);
     final twoLaneChance = GameConfig.twoLaneBlockBaseChance +
         (GameConfig.twoLaneBlockMaxChance -
                 GameConfig.twoLaneBlockBaseChance) *
             d;
-    if (laneCount > 2 && _random.nextDouble() < twoLaneChance) {
+    if (canBlockTwo && _random.nextDouble() < twoLaneChance) {
       var second = _random.nextInt(laneCount);
       while (blocked.contains(second)) {
         second = _random.nextInt(laneCount);
@@ -106,12 +106,22 @@ class SeededObstacleGenerator {
       blocked.add(second);
     }
 
-    // Fairness invariant: never block every lane.
     assert(blocked.length < laneCount);
 
-    final kinds = <int, ObstacleKind>{
-      for (final lane in blocked) lane: _pickObstacleKind(d),
-    };
+    // Assign archetypes while guaranteeing at most ONE tallMonolith per wave.
+    final kinds = <int, ObstacleKind>{};
+    var hasMonolith = false;
+    final allowMonolithInWave = _waveIndex > 1 || d >= 0.15;
+    for (final lane in blocked) {
+      final kind = _pickObstacleKind(
+        d,
+        allowMonolith: allowMonolithInWave && !hasMonolith,
+      );
+      if (kind == ObstacleKind.tallMonolith) {
+        hasMonolith = true;
+      }
+      kinds[lane] = kind;
+    }
 
     final freeLanes = <int>[
       for (var i = 0; i < laneCount; i++)
@@ -122,23 +132,23 @@ class SeededObstacleGenerator {
     var orbTrailCount = 0;
     if (_random.nextDouble() < GameConfig.orbChance) {
       orbLane = freeLanes[_random.nextInt(freeLanes.length)];
-      orbTrailCount = 3 + _random.nextInt(3); // 3..5 orbs in a Subway line
+      orbTrailCount = 3 + _random.nextInt(3); // 3..5 orbs in a clean line
     }
 
-    // Optional jump-reward arc over a lowSpikes obstacle.
+    // Optional jump-reward arc centered over a lowSpikes obstacle.
     int? jumpArcLane;
     final lowLanes = <int>[
       for (final entry in kinds.entries)
         if (entry.value == ObstacleKind.lowSpikes) entry.key,
     ];
-    if (lowLanes.isNotEmpty && _random.nextDouble() < 0.34) {
+    if (lowLanes.isNotEmpty && _random.nextDouble() < 0.38) {
       jumpArcLane = lowLanes[_random.nextInt(lowLanes.length)];
     }
 
-    // Periodic power-up pickup on a free lane (every ~4-5 waves).
+    // Periodic power-up pickup on a free lane.
     int? powerUpLane;
     PowerUpKind? powerUpKind;
-    if (_waveIndex >= 2 && _random.nextDouble() < 0.22) {
+    if (_waveIndex >= 3 && _random.nextDouble() < 0.20) {
       final candidateLanes = freeLanes.length > 1 && orbLane != null
           ? [for (final l in freeLanes) if (l != orbLane) l]
           : freeLanes;
@@ -147,9 +157,7 @@ class SeededObstacleGenerator {
       powerUpKind = allPowerUps[_random.nextInt(allPowerUps.length)];
     }
 
-    // Spacing: 12%..58% slack above the fairness minimum so 4-orb trails fit
-    // cleanly without overlapping the next wave.
-    final jitterFactor = 1.12 + _random.nextDouble() * 0.46;
+    final jitterFactor = 1.14 + _random.nextDouble() * 0.42;
     final gap = minGapFor(speed) * jitterFactor;
 
     return SpawnWave(

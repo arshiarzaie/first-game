@@ -6,10 +6,10 @@ import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 import '../systems/obstacle_spawner.dart';
 
-/// 2.5D track hazard with three Subway-style vertical archetypes (S12):
-///  * [ObstacleKind.lowSpikes] — vaultable ground crystal cluster;
-///  * [ObstacleKind.highArch] — duckable overhead portal arch;
-///  * [ObstacleKind.tallMonolith] — full-height impassable rune monolith.
+/// True-1/Z 3D track hazard with three cohesive Subway-style archetypes (S13):
+///  * [ObstacleKind.lowSpikes] — waist-high crystal barricade (jump over);
+///  * [ObstacleKind.highArch] — twin-column overhead rune gate (slide under);
+///  * [ObstacleKind.tallMonolith] — towering obelisk wall (switch lanes).
 class Obstacle extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   Obstacle({
@@ -31,11 +31,14 @@ class Obstacle extends PositionComponent
     final base = game.size.x * GameConfig.entityWidthRatio;
     switch (kind) {
       case ObstacleKind.lowSpikes:
-        size = Vector2(base * 1.05, base * 1.02);
+        // Matches 768x640 aspect (wide low crystal barricade across lane).
+        size = Vector2(base * 1.18, base * 0.98);
       case ObstacleKind.highArch:
-        size = Vector2(base * 1.42, base * 1.52);
+        // Tall twin-column portal spanning the lane with generous slide tunnel.
+        size = Vector2(base * 1.40, base * 1.58);
       case ObstacleKind.tallMonolith:
-        size = Vector2(base * 1.18, base * 1.74);
+        // Matches 640x960 aspect (towering full-lane obelisk).
+        size = Vector2(base * 1.10, base * 1.65);
     }
     _applyProjection();
   }
@@ -45,13 +48,14 @@ class Obstacle extends PositionComponent
     super.update(dt);
     _depth -= (game.currentSpeed / GameConfig.trackLength) * dt;
 
-    // Evaluate true 2.5D (lane, depth, vertical state) collision as the
-    // hazard crosses the player plane.
-    if (!_resolvedPlayerPlane && _depth <= 0.048 && _depth >= -0.042) {
+    // Fair Subway-grade 3D collision evaluation across Soul's plane:
+    //  * Forgiving horizontal threshold (`collisionLaneThreshold = 0.36`) so
+    //    active lane dodges are rewarded rather than clipped on corners.
+    //  * Outer graze zone (`0.36..0.46`) emits a near-miss spark without death!
+    if (!_resolvedPlayerPlane && _depth <= 0.032 && _depth >= -0.028) {
       final laneDiff = (game.player.currentLane - lane).abs();
-      if (laneDiff < 0.49 && !game.powerUps.isSolarDashing) {
-        final cleared = _isClearedVertically();
-        if (!cleared) {
+      if (!game.powerUps.isSolarDashing && !_isClearedVertically()) {
+        if (laneDiff < GameConfig.collisionLaneThreshold) {
           _resolvedPlayerPlane = true;
           final shatteredByShield = game.onObstacleImpact(
             Vector2(position.x, position.y - size.y * scale.y * 0.45),
@@ -60,11 +64,16 @@ class Obstacle extends PositionComponent
             removeFromParent();
             return;
           }
+        } else if (laneDiff < 0.46) {
+          _resolvedPlayerPlane = true;
+          game.onNearMissSpark(
+            Vector2(position.x, position.y - size.y * scale.y * 0.40),
+          );
         }
       }
     }
 
-    if (_depth <= -0.16) {
+    if (_depth <= -0.18) {
       removeFromParent();
       return;
     }
@@ -83,6 +92,10 @@ class Obstacle extends PositionComponent
   }
 
   void _applyProjection() {
+    if (_depth > 1.02) {
+      scale = Vector2.zero();
+      return;
+    }
     final sc = game.scaleForDepth(_depth);
     position = Vector2(
       game.laneXForDepth(lane.toDouble(), _depth),
@@ -90,15 +103,9 @@ class Obstacle extends PositionComponent
     );
     scale = Vector2.all(sc);
 
-    // 3D occlusion sorting relative to SoulPlayer (priority 20):
-    //  * Overhead arches near the player draw in front of Soul so sliding
-    //    visibly passes underneath the glowing crossbar.
-    //  * Hazards that have already passed the player plane draw in front.
-    //  * Approaching ground spikes stay < 20 so a jumping Soul vaults cleanly
-    //    over top of them.
-    if (_depth < -0.045) {
+    if (_depth < -0.035) {
       priority = 25;
-    } else if (kind == ObstacleKind.highArch && _depth < 0.09) {
+    } else if (kind == ObstacleKind.highArch && _depth < 0.085) {
       priority = 23;
     } else {
       priority = (6 + (1.0 - _depth).clamp(0.0, 1.0) * 13).round();
@@ -119,36 +126,46 @@ class Obstacle extends PositionComponent
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    if (_depth > 1.02) {
+      return;
+    }
     final w = size.x;
     final h = size.y;
+    final horizonAlpha = ((1.02 - _depth) / 0.10).clamp(0.0, 1.0);
 
     final sprite = _sprite;
     if (sprite != null) {
-      final fit = (w / sprite.width < h / sprite.height)
-          ? w / sprite.width
-          : h / sprite.height;
-      final dw = sprite.width * fit;
-      final dh = sprite.height * fit;
+      final double dw;
+      final double dh;
+      if (kind == ObstacleKind.highArch) {
+        dw = w;
+        dh = h;
+      } else {
+        final fit = (w / sprite.width < h / sprite.height)
+            ? w / sprite.width
+            : h / sprite.height;
+        dw = sprite.width * fit;
+        dh = sprite.height * fit;
+      }
 
       if (kind == ObstacleKind.highArch) {
-        // Two separate contact shadows under the left and right arch posts
-        // so the open slide gap in the middle stays clean.
         final postShadow = Paint()
-          ..color = const Color(0x800D051A)
+          ..color =
+              const Color(0x800D051A).withValues(alpha: 0.50 * horizonAlpha)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
         canvas.drawOval(
           Rect.fromCenter(
-            center: Offset((w - dw) / 2 + dw * 0.14, h * 0.96),
-            width: dw * 0.24,
-            height: h * 0.09,
+            center: Offset((w - dw) / 2 + dw * 0.15, h * 0.96),
+            width: dw * 0.22,
+            height: h * 0.08,
           ),
           postShadow,
         );
         canvas.drawOval(
           Rect.fromCenter(
-            center: Offset((w + dw) / 2 - dw * 0.14, h * 0.96),
-            width: dw * 0.24,
-            height: h * 0.09,
+            center: Offset((w + dw) / 2 - dw * 0.15, h * 0.96),
+            width: dw * 0.22,
+            height: h * 0.08,
           ),
           postShadow,
         );
@@ -156,11 +173,12 @@ class Obstacle extends PositionComponent
         canvas.drawOval(
           Rect.fromCenter(
             center: Offset(w / 2, h * 0.95),
-            width: dw * 0.82,
-            height: h * 0.16,
+            width: dw * 0.80,
+            height: h * 0.14,
           ),
           Paint()
-            ..color = const Color(0x880D051A)
+            ..color =
+                const Color(0x880D051A).withValues(alpha: 0.55 * horizonAlpha)
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
         );
       }
@@ -170,7 +188,9 @@ class Obstacle extends PositionComponent
         Rect.fromLTWH(
             0, 0, sprite.width.toDouble(), sprite.height.toDouble()),
         Rect.fromLTWH((w - dw) / 2, h - dh, dw, dh),
-        Paint()..filterQuality = FilterQuality.medium,
+        Paint()
+          ..color = Color.fromARGB((horizonAlpha * 255).round(), 255, 255, 255)
+          ..filterQuality = FilterQuality.medium,
       );
       return;
     }
@@ -181,7 +201,7 @@ class Obstacle extends PositionComponent
   void _renderFallback(Canvas canvas, double w, double h) {
     final fill = Paint()..color = const Color(0xFF1C1030);
     final edge = Paint()
-      ..color = const Color(0xFF4DD8FF)
+      ..color = const Color(0xFF9E6BFF)
       ..style = PaintingStyle.stroke
       ..strokeWidth = w * 0.035
       ..strokeJoin = StrokeJoin.round;
@@ -190,7 +210,7 @@ class Obstacle extends PositionComponent
       case ObstacleKind.lowSpikes:
         final spike = Path()
           ..moveTo(0, h)
-          ..lineTo(w * 0.5, h * 0.15)
+          ..lineTo(w * 0.5, h * 0.18)
           ..lineTo(w, h)
           ..close();
         canvas.drawPath(spike, fill);
