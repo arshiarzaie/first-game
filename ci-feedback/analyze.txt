@@ -11,5 +11,5 @@ Got dependencies!
 Try `flutter pub outdated` for more information.
 Analyzing first-game...                                         
 
-   info • The import of 'package:flame/components.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flame/game.dart'. Try removing the import directive • lib/game/soul_dusk_run_game.dart:5:8 • unnecessary_import
+  error • The argument type 'num' can't be assigned to the parameter type 'double'.  • lib/game/components/track_scene.dart:166:25 • argument_type_not_assignable
 
