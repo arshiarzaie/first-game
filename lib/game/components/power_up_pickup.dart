@@ -7,8 +7,11 @@ import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 import '../systems/power_up_system.dart';
 
-/// Collectible on-track Subway-Surfers power-up badge (S15: Magnet, 2x Surge,
-/// Jetpack Sky-Dash, and Super Sneakers).
+/// Collectible ancient rune-crystal blessing badge (`SOUL: DUSK RUN` S16):
+///  * [PowerUpKind.magnet] — Light Magnet;
+///  * [PowerUpKind.multiplier2x] — 2x Radiance;
+///  * [PowerUpKind.solarDash] — Solar Comet Flight;
+///  * [PowerUpKind.superSneakers] — Sky-Leap Blessing (vault onto platforms!).
 class PowerUpPickup extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   PowerUpPickup({
@@ -30,7 +33,7 @@ class PowerUpPickup extends PositionComponent
   Future<void> onLoad() async {
     await super.onLoad();
     anchor = Anchor.center;
-    final width = game.size.x * GameConfig.entityWidthRatio * 0.90;
+    final width = game.size.x * GameConfig.entityWidthRatio * 0.88;
     size = Vector2.all(width);
     _applyProjection();
   }
@@ -78,24 +81,24 @@ class PowerUpPickup extends PositionComponent
   Color get _accentColor {
     switch (kind) {
       case PowerUpKind.magnet:
-        return const Color(0xFF2898D8);
+        return const Color(0xFFC49BFF);
       case PowerUpKind.multiplier2x:
-        return const Color(0xFFF5A623);
+        return const Color(0xFFFFCF5C);
       case PowerUpKind.solarDash:
-        return const Color(0xFFE8563A);
+        return const Color(0xFFFF8E4C);
       case PowerUpKind.superSneakers:
-        return const Color(0xFF34B864);
+        return const Color(0xFF72F2DC);
     }
   }
 
   String get _glyph {
     switch (kind) {
       case PowerUpKind.magnet:
-        return 'U';
+        return '✦';
       case PowerUpKind.multiplier2x:
         return '2x';
       case PowerUpKind.solarDash:
-        return '★';
+        return '☀';
       case PowerUpKind.superSneakers:
         return '▲';
     }
@@ -116,27 +119,27 @@ class PowerUpPickup extends PositionComponent
     canvas.drawCircle(
       c,
       w * 0.44 * pulse,
-      Paint()..color = accent.withValues(alpha: 0.25 * horizonAlpha),
+      Paint()..color = accent.withValues(alpha: 0.28 * horizonAlpha),
     );
 
     final r = w * 0.35 * pulse;
-    final diamond = Path()
+    final crystal = Path()
       ..moveTo(c.dx, c.dy - r)
-      ..lineTo(c.dx + r, c.dy)
+      ..lineTo(c.dx + r * 0.85, c.dy)
       ..lineTo(c.dx, c.dy + r)
-      ..lineTo(c.dx - r, c.dy)
+      ..lineTo(c.dx - r * 0.85, c.dy)
       ..close();
     canvas.drawPath(
-      diamond,
+      crystal,
       Paint()
-        ..color = const Color(0xF01C2C44).withValues(alpha: 0.94 * horizonAlpha),
+        ..color = const Color(0xF0281C44).withValues(alpha: 0.94 * horizonAlpha),
     );
     canvas.drawPath(
-      diamond,
+      crystal,
       Paint()
         ..color = accent.withValues(alpha: horizonAlpha)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = w * 0.06,
+        ..strokeWidth = w * 0.055,
     );
 
     final tp = TextPainter(

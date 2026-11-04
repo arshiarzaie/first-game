@@ -7,20 +7,24 @@ import 'package:flame/components.dart';
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
-/// S15 Sunlit Subway-Surfers-Grade Full-Width 3D Boulevard & 3-Lane Railway.
+/// S16 Cinematic `SOUL: DUSK RUN` Floating Ancient Stone Causeway & Fantasy
+/// Valley Vista (faithful 1-to-1 implementation of the Official Concept Board).
 ///
-/// Eliminates all dark-tunnel eye strain and 2D flatness:
-///  1. Bright, high-key sunlit morning/golden-hour sky & painted horizon;
-///  2. Full-width sunlit stone sidewalks (`0..W`, zero dark empty abyss);
-///  3. Zero-flicker 3-lane twin-steel railway bed (`track_strip.png`);
-///  4. True `1/Z` 3D perspective-extruded sunlit boulevard buildings with solid
-///     3D roofs, receding inner walls, recessed windows, terracotta cornices,
-///     and lush shaded sidewalk trees/cacti (`corridor_pillar.png`).
+/// Renders:
+///  1. Full-bleed vertical pre-rendered fantasy world painting (`backdrop.png`)
+///     covering 100% of screen width and height (`0..W`, `0..H`) so both lush
+///     fantasy valley flanks remain completely visible with zero dark void;
+///  2. Sculpted 3D stone bridge side-apron depth bevels along the floating
+///     causeway edges;
+///  3. Smooth zero-flicker `12×48` `1/Z` perspective-foreshortened ancient
+///     stone causeway (`track_strip.png`);
+///  4. Pre-rendered 3D parapet lantern-pillars (`corridor_pillar.png`) with
+///     warm magical lantern light pools streaming along the bridge curbs.
 class TrackScene extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   TrackScene() : super(priority: -100);
 
-  static const int _meshCols = 10;
+  static const int _meshCols = 12;
   static const int _meshRows = 48;
   static final Float64List _identityMatrix4 = Float64List.fromList(const [
     1.0, 0.0, 0.0, 0.0,
@@ -90,10 +94,10 @@ class TrackScene extends PositionComponent
     } else {
       _renderPlaceholderBackdrop(canvas, w, h);
     }
-    _renderSunlitSidewalks(canvas, w, h);
+    _renderBridgeStoneApron(canvas, w, h);
     _renderTrack(canvas, w, h);
-    _renderBoulevardBuildingsAndTrees(canvas, w, h);
-    _renderSkyDashWind(canvas, w, h);
+    _renderParapetLanternPillars(canvas, w, h);
+    _renderSolarFlightStreaks(canvas, w, h);
   }
 
   void _renderWorldBackdrop(
@@ -109,8 +113,10 @@ class TrackScene extends PositionComponent
     final horizonFrac =
         GameConfig.backdropHorizonFractionFor(game.selectedWorld);
     final minScaleForSky =
-        (horizonY + 8) / math.max(1.0, imgH * horizonFrac);
-    final scale = math.max(w / imgW, minScaleForSky) * 1.08;
+        (horizonY + 6) / math.max(1.0, imgH * horizonFrac);
+    // Cover 100% of screen width AND height so lush painted valley cliffs
+    // extend all the way to the bottom corners (`0%` black border!).
+    final scale = math.max(math.max(w / imgW, h / imgH), minScaleForSky) * 1.05;
 
     final laneCenter = (GameConfig.laneCount - 1) / 2;
     final sway = (game.cameraLane - laneCenter) * -GameConfig.cameraSwayPerLane;
@@ -127,36 +133,13 @@ class TrackScene extends PositionComponent
     );
   }
 
-  /// Full-width sunlit boulevard ground & raised stone sidewalks (`0..W`,
-  /// eliminating all dark side voids!).
-  void _renderSunlitSidewalks(Canvas canvas, double w, double h) {
+  /// Subtle 3D carved stone thickness under the outer edges of the floating
+  /// ancient bridge so it sits naturally inside the valley chasm.
+  void _renderBridgeStoneApron(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
     if (h <= horizonY) {
       return;
     }
-    final Color walkCol;
-    final Color outerCol;
-    final Color lipCol;
-    switch (game.selectedWorld) {
-      case GameWorld.duskHollow:
-        walkCol = const Color(0xFFDACCB8);
-        outerCol = const Color(0xFFC8B8A4);
-        lipCol = const Color(0xFFA69684);
-      case GameWorld.moonveilMarsh:
-        walkCol = const Color(0xFFC2D6D4);
-        outerCol = const Color(0xFFACC4C2);
-        lipCol = const Color(0xFF8AA6A6);
-      case GameWorld.emberfallCanyon:
-        walkCol = const Color(0xFFE0B896);
-        outerCol = const Color(0xFFCCA280);
-        lipCol = const Color(0xFFAA8264);
-    }
-
-    canvas.drawRect(
-      Rect.fromLTWH(0, horizonY, w, h - horizonY),
-      Paint()..color = outerCol,
-    );
-
     final depthBottom = game.depthForScreenY(h);
     const pFar = GameConfig.farScale;
     final pBottom = game.perspectiveFactor(depthBottom);
@@ -164,218 +147,78 @@ class TrackScene extends PositionComponent
     final cxTop = game.trackCenterXForDepth(1.0);
     final cxBot = game.trackCenterXForDepth(depthBottom);
     final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
-    final walkPlayer = w * 0.135;
+    final apronPlayer = w * 0.022;
 
     final hTop = halfPlayer * pFar;
     final hBot = halfPlayer * pBottom;
-    final wTop = walkPlayer * pFar;
-    final wBot = walkPlayer * pBottom;
+    final aTop = apronPlayer * pFar;
+    final aBot = apronPlayer * pBottom;
 
-    final walkPaint = Paint()..color = walkCol;
-    final lipPaint = Paint()
-      ..color = lipCol
-      ..strokeWidth = 2.2;
+    final Color apronCol;
+    switch (game.selectedWorld) {
+      case GameWorld.duskHollow:
+        apronCol = const Color(0xCC3C3058);
+      case GameWorld.moonveilMarsh:
+        apronCol = const Color(0xCC22444E);
+      case GameWorld.emberfallCanyon:
+        apronCol = const Color(0xCC7E5034);
+    }
 
+    final paint = Paint()..color = apronCol;
     for (final side in const [-1.0, 1.0]) {
-      final sxTop = cxTop + side * (hTop + wTop);
-      final sxBot = cxBot + side * (hBot + wBot);
-      final walkPath = Path()
+      final path = Path()
         ..moveTo(cxTop + side * hTop, horizonY)
-        ..lineTo(sxTop, horizonY)
-        ..lineTo(sxBot, h)
+        ..lineTo(cxTop + side * (hTop + aTop), horizonY + 3)
+        ..lineTo(cxBot + side * (hBot + aBot), h)
         ..lineTo(cxBot + side * hBot, h)
         ..close();
-      canvas.drawPath(walkPath, walkPaint);
-      canvas.drawLine(Offset(sxTop, horizonY), Offset(sxBot, h), lipPaint);
+      canvas.drawPath(path, paint);
     }
   }
 
-  /// True `1/Z` 3D perspective-extruded sunlit boulevard buildings + lush
-  /// shaded sidewalk trees/cacti along both sides of the railway!
-  void _renderBoulevardBuildingsAndTrees(Canvas canvas, double w, double h) {
+  /// Streams pre-rendered 3D fantasy lantern-pillars (`corridor_pillar.png`)
+  /// synchronously with the bridge masonry along both stone parapets!
+  void _renderParapetLanternPillars(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
     if (h <= horizonY) {
       return;
     }
-
-    final List<Color> frontCols;
-    final List<Color> sideCols;
-    final Color roofDeckCol;
-    final Color roofTrimCol;
-    switch (game.selectedWorld) {
-      case GameWorld.duskHollow:
-        frontCols = const [
-          Color(0xFFF0D6B6),
-          Color(0xFFEAC2AC),
-          Color(0xFFDED4C6),
-        ];
-        sideCols = const [
-          Color(0xFFDABE9E),
-          Color(0xFFD2A894),
-          Color(0xFFC6BCAC),
-        ];
-        roofDeckCol = const Color(0xFFD88864);
-        roofTrimCol = const Color(0xFFBC6244);
-      case GameWorld.moonveilMarsh:
-        frontCols = const [
-          Color(0xFFD4E8E4),
-          Color(0xFFC4E0E2),
-          Color(0xFFDCECE2),
-        ];
-        sideCols = const [
-          Color(0xFFB8D0CC),
-          Color(0xFFA8C6CA),
-          Color(0xFFC0D4CA),
-        ];
-        roofDeckCol = const Color(0xFF5CA6AC);
-        roofTrimCol = const Color(0xFF3A888E);
-      case GameWorld.emberfallCanyon:
-        frontCols = const [
-          Color(0xFFEEBA90),
-          Color(0xFFE29C76),
-          Color(0xFFECAE84),
-        ];
-        sideCols = const [
-          Color(0xFFD29E76),
-          Color(0xFFC68260),
-          Color(0xFFD0946E),
-        ];
-        roofDeckCol = const Color(0xFFC86A48);
-        roofTrimCol = const Color(0xFFA84E32);
-    }
-
-    final hp = w * GameConfig.trackBottomHalfWidthRatio;
-    final walkW = w * 0.135;
     final pillar = game.corridorPillar;
+    final auraColor = Color(GameConfig.lanternAuraArgbFor(game.selectedWorld));
 
-    const bldgCount = 4;
-    const bldgSpan = 1.28;
-    const bStep = bldgSpan / bldgCount;
-    final bScroll = game.travelled / GameConfig.trackLength;
-    final slotBase = bScroll.floor();
-    final bPhase = bScroll % bStep;
+    const pairCount = 4;
+    const depthSpan = 1.16;
+    const step = depthSpan / pairCount;
+    final phase = (game.travelled / GameConfig.trackLength) % step;
+    final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
 
-    final outlinePaint = Paint()
-      ..color = const Color(0x99706054)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    final winPaint = Paint()..color = const Color(0xE640607C);
-
-    // Draw back-to-front (`k = 0` is closest to horizon).
-    for (var k = 0; k < bldgCount; k++) {
-      final distH = bPhase + k * bStep;
-      final zfRaw = 1.0 - distH;
-      final zb = math.min(1.0, zfRaw + bStep * 0.78);
-      if (zfRaw >= zb - 0.02 || zfRaw < -0.25) {
+    for (var k = 0; k < pairCount; k++) {
+      final distH = phase + k * step;
+      final depth = 1.0 - distH;
+      if (depth > 0.99 || depth < -0.16) {
         continue;
       }
-      final zf = math.max(-0.22, zfRaw);
-      final pf = game.perspectiveFactor(zf);
-      final pb = game.perspectiveFactor(zb);
-      final yf = game.yForDepth(zf);
-      final yb = game.yForDepth(zb);
-      final cxf = game.trackCenterXForDepth(zf);
-      final cxb = game.trackCenterXForDepth(zb);
+      final sc = game.perspectiveFactor(depth);
+      final yb = game.yForDepth(depth);
+      final cx = game.trackCenterXForDepth(depth);
+      final hw = halfPlayer * sc;
+      final fade = (distH / 0.12).clamp(0.0, 1.0).toDouble();
 
-      final styleIdx = ((slotBase - k) % 3 + 3) % 3;
-      final bldgH = h * (0.18 + 0.035 * (styleIdx % 2));
-      final colF = frontCols[styleIdx];
-      final colS = sideCols[styleIdx];
-      final alpha = (distH / 0.10).clamp(0.0, 1.0).toDouble();
+      final pw = w * 0.165 * sc;
+      final aspect = pillar != null ? pillar.height / pillar.width : 1.75;
+      final ph = pw * aspect;
 
       for (final side in const [-1.0, 1.0]) {
-        final ixF = cxf + side * (hp + walkW) * pf;
-        final ixB = cxb + side * (hp + walkW) * pb;
-        final oxF = side < 0 ? -12.0 : w + 12.0;
-        final oxB = cxb + side * (hp + walkW + w * 0.40) * pb;
-        final ytF = yf - bldgH * pf;
-        final ytB = yb - bldgH * pb;
+        final px = cx + side * hw * 0.95;
 
-        // 1. Solid 3D Roof Deck (when viewed from slightly above)
-        if (ytF > ytB) {
-          final roofPath = Path()
-            ..moveTo(ixF, ytF)
-            ..lineTo(oxF, ytF)
-            ..lineTo(oxB, ytB)
-            ..lineTo(ixB, ytB)
-            ..close();
-          canvas.drawPath(
-            roofPath,
-            Paint()..color = roofDeckCol.withValues(alpha: alpha),
-          );
-        }
-
-        // 2. 3D Perspective Inner Facade Wall facing the railway
-        final sideWall = Path()
-          ..moveTo(ixF, yf)
-          ..lineTo(ixB, yb)
-          ..lineTo(ixB, ytB)
-          ..lineTo(ixF, ytF)
-          ..close();
-        canvas.drawPath(
-          sideWall,
-          Paint()..color = colS.withValues(alpha: alpha),
-        );
-        canvas.drawPath(sideWall, outlinePaint);
-
-        // Two perspective-foreshortened windows along inner facade
-        winPaint.color = const Color(0xE640607C).withValues(alpha: alpha);
-        for (final spanU in const [(0.18, 0.42), (0.58, 0.82)]) {
-          final u0 = spanU.$1;
-          final u1 = spanU.$2;
-          final wx0 = ixF + (ixB - ixF) * u0;
-          final wx1 = ixF + (ixB - ixF) * u1;
-          final wyt0 = ytF + (ytB - ytF) * u0;
-          final wyt1 = ytF + (ytB - ytF) * u1;
-          final hh0 = (yf - ytF) * (1 - u0) + (yb - ytB) * u0;
-          final hh1 = (yf - ytF) * (1 - u1) + (yb - ytB) * u1;
-          final winPath = Path()
-            ..moveTo(wx0, wyt0 + hh0 * 0.20)
-            ..lineTo(wx1, wyt1 + hh1 * 0.20)
-            ..lineTo(wx1, wyt1 + hh1 * 0.52)
-            ..lineTo(wx0, wyt0 + hh0 * 0.52)
-            ..close();
-          canvas.drawPath(winPath, winPaint);
-        }
-
-        // Terracotta / tile cornice along inner roof edge
-        final trimPaint = Paint()
-          ..color = roofTrimCol.withValues(alpha: alpha)
-          ..strokeWidth = (4.5 * pf).clamp(1.5, 6.0).toDouble()
-          ..strokeCap = StrokeCap.round;
-        canvas.drawLine(Offset(ixF, ytF), Offset(ixB, ytB), trimPaint);
-
-        // 3. Front Wall facing the player at zf
-        final frontWall = Path()
-          ..moveTo(ixF, yf)
-          ..lineTo(oxF, yf)
-          ..lineTo(oxF, ytF)
-          ..lineTo(ixF, ytF)
-          ..close();
-        canvas.drawPath(
-          frontWall,
-          Paint()..color = colF.withValues(alpha: alpha),
-        );
-        canvas.drawPath(frontWall, outlinePaint);
-        canvas.drawLine(Offset(ixF, ytF), Offset(oxF, ytF), trimPaint);
-
-        // 4. Lush Sidewalk Tree / Cactus in stone planter!
-        final zm = (zf + zb) * 0.5;
-        final pm = game.perspectiveFactor(zm);
-        final ym = game.yForDepth(zm);
-        final pw = w * 0.145 * pm;
-        final aspect = pillar != null ? pillar.height / pillar.width : 1.71;
-        final ph = pw * aspect;
-        final tx = game.trackCenterXForDepth(zm) +
-            side * (hp + walkW * 0.52) * pm;
-
+        // Soft warm magical lantern glow pool cast onto the stone curb!
         canvas.drawOval(
           Rect.fromCenter(
-            center: Offset(tx, ym),
-            width: pw * 0.58,
-            height: pw * 0.15,
+            center: Offset(px - side * pw * 0.18, yb),
+            width: pw * 0.95,
+            height: pw * 0.24,
           ),
-          Paint()..color = const Color(0x484E463E).withValues(alpha: 0.30 * alpha),
+          Paint()..color = auraColor.withValues(alpha: 0.20 * fade),
         );
 
         if (pillar != null) {
@@ -383,26 +226,22 @@ class TrackScene extends PositionComponent
             pillar,
             Rect.fromLTWH(
                 0, 0, pillar.width.toDouble(), pillar.height.toDouble()),
-            Rect.fromLTWH(tx - pw / 2, ym + ph * 0.02 - ph, pw, ph),
+            Rect.fromLTWH(px - pw / 2, yb + ph * 0.04 - ph, pw, ph),
             Paint()
-              ..color = Color.fromARGB((alpha * 255).round(), 255, 255, 255)
+              ..color = Color.fromARGB((fade * 255).round(), 255, 255, 255)
               ..filterQuality = FilterQuality.medium,
           );
         } else {
-          canvas.drawOval(
-            Rect.fromCenter(
-              center: Offset(tx, ym - ph * 0.52),
-              width: pw * 0.65,
-              height: ph * 0.55,
-            ),
-            Paint()..color = const Color(0xFF569E60).withValues(alpha: alpha),
+          canvas.drawRect(
+            Rect.fromLTWH(px - pw * 0.18, yb - ph * 0.8, pw * 0.36, ph * 0.8),
+            Paint()..color = auraColor.withValues(alpha: 0.75 * fade),
           );
         }
       }
     }
   }
 
-  void _renderSkyDashWind(Canvas canvas, double w, double h) {
+  void _renderSolarFlightStreaks(Canvas canvas, double w, double h) {
     if (!game.isRunStarted || !game.powerUps.isSolarDashing) {
       return;
     }
@@ -421,15 +260,15 @@ class TrackScene extends PositionComponent
       final r1 = (r0 + 0.10).clamp(0.0, 1.0).toDouble();
       final spreadY = 0.16 + (i % 3) * 0.20;
       final p0 = Offset(
-        cx + side * w * 0.46 * r0,
+        cx + side * w * 0.44 * r0,
         horizonY + (h - horizonY) * spreadY * r0,
       );
       final p1 = Offset(
-        cx + side * w * 0.46 * r1,
+        cx + side * w * 0.44 * r1,
         horizonY + (h - horizonY) * spreadY * r1,
       );
-      final fade = (math.sin(t * math.pi) * 0.32).clamp(0.0, 1.0).toDouble();
-      paint.color = const Color(0xFFFFFFFF).withValues(alpha: fade);
+      final fade = (math.sin(t * math.pi) * 0.36).clamp(0.0, 1.0).toDouble();
+      paint.color = const Color(0xFFFFECA8).withValues(alpha: fade);
       canvas.drawLine(p0, p1, paint);
     }
   }
@@ -473,7 +312,7 @@ class TrackScene extends PositionComponent
         halfPlayer: halfPlayer,
       );
 
-      final fadeEnd = horizonY + (h - horizonY) * 0.04;
+      final fadeEnd = horizonY + (h - horizonY) * 0.045;
       canvas.drawRect(
         Rect.fromLTWH(0, horizonY, w, fadeEnd - horizonY + 1),
         Paint()
@@ -488,19 +327,16 @@ class TrackScene extends PositionComponent
       return;
     }
 
-    // Sunlit railway fallback for headless widget tests without loaded images.
-    final railPaint = Paint()
+    final runePaint = Paint()
       ..color = Color(GameConfig.trackLaneArgbFor(game.selectedWorld))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
-    for (var lane = 0; lane < GameConfig.laneCount; lane++) {
-      for (final rOff in const [-0.18, 0.18]) {
-        canvas.drawLine(
-          Offset(game.laneXForDepth(lane + rOff, 1.0), horizonY),
-          Offset(game.laneXForDepth(lane + rOff, depthBottom), h),
-          railPaint,
-        );
-      }
+    for (final div in const [-0.5, 0.5]) {
+      canvas.drawLine(
+        Offset(game.laneXForDepth(1.0 + div, 1.0), horizonY),
+        Offset(game.laneXForDepth(1.0 + div, depthBottom), h),
+        runePaint,
+      );
     }
   }
 
@@ -564,18 +400,13 @@ class TrackScene extends PositionComponent
   }
 
   void _renderPlaceholderBackdrop(Canvas canvas, double w, double h) {
-    final horizonY = game.horizonY;
     final sky = Paint()
       ..shader = Gradient.linear(
         Offset.zero,
-        Offset(0, horizonY),
-        const [Color(0xFF4A94DC), Color(0xFF98CAEE), Color(0xFFFCE4C0)],
-        const [0.0, 0.58, 1.0],
+        Offset(0, h),
+        const [Color(0xFF5A4888), Color(0xFFD89882), Color(0xFF48386E)],
+        const [0.0, 0.32, 1.0],
       );
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, horizonY), sky);
-    canvas.drawRect(
-      Rect.fromLTWH(0, horizonY, w, h - horizonY),
-      Paint()..color = const Color(0xFFC8B8A4),
-    );
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), sky);
   }
 }

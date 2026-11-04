@@ -6,17 +6,17 @@ import 'package:flame/components.dart';
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
-/// The Soul — crisp sunlit golden humanoid sun runner (S15 Subway-Surfers
-/// Grade).
+/// The Soul — Pixar-3D volumetric golden sun-child runner (`SOUL: DUSK RUN`
+/// S16, faithful to the Official Concept Board).
 ///
 /// Features:
-///  * Crisp warm-umber cartoon silhouette outline across all 8 athletic run
-///    frames, sky-vault jump, and parkour roll poses;
-///  * Real 3D Hoverboard (`hasShield`) rendered directly beneath Soul's feet
-///    with banked surfing tilt;
-///  * Glowing green-gold Super Sneakers aura around Soul's feet when active;
-///  * Smooth cubic ease-out lane carve + athletic step-hop arc + touchdown
-///    cushion on both ground rails AND 3D train roofs!
+///  * Warm radiant golden light reflection cast onto the stone bridge (just
+///    like `حین بازی` & `A. پشت شخصیت` on the Concept Board!);
+///  * Celestial Golden Sun-Disk (`hasShield`) floating beneath Soul's feet;
+///  * Sky-Leap golden aura rings (`hasSuperSneakers`) & Solar Comet Wings
+///    (`isSolarDashing`);
+///  * Smooth cubic ease-out lane carve, athletic hop arc, and landing cushion
+///    on both ancient stone bridges AND elevated stone sanctuary platforms!
 class SoulPlayer extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   SoulPlayer() : super(priority: 2000);
@@ -114,7 +114,6 @@ class SoulPlayer extends PositionComponent
       if (!game.isRunStarted) {
         index = GameConfig.runIdleFrame;
       } else if (jumping || game.powerUps.hasShield) {
-        // Surfing on Hoverboard holds an athletic poised stance with gentle carve!
         index = game.powerUps.hasShield ? 1 : 0;
       } else if (sliding) {
         index = 4 % frames.length;
@@ -171,62 +170,82 @@ class SoulPlayer extends PositionComponent
         : 0.0;
 
     final footAnchorShift = dh * 0.37;
-    // Shadow sits right on the active support surface (track rails OR train roof!)
     final supportFloorY = h / 2 - supportLiftPx;
     final shadowScale =
         (1.0 - airAboveSupport * 0.42).clamp(0.45, 1.0).toDouble();
 
+    // Warm golden light reflection cast onto the stone bridge beneath Soul
+    // (signature `SOUL: DUSK RUN` lighting from the Concept Board!)
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w / 2, supportFloorY + 3),
+        width: dw * 0.72 * shadowScale,
+        height: dh * 0.15 * shadowScale,
+      ),
+      Paint()..color = const Color(0x44FFBE4C),
+    );
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(w / 2, supportFloorY + 2),
-        width: dw * 0.46 * shadowScale,
-        height: dh * 0.085 * shadowScale,
+        width: dw * 0.42 * shadowScale,
+        height: dh * 0.08 * shadowScale,
       ),
-      Paint()..color = const Color(0x78302A24),
+      Paint()..color = const Color(0x66221632),
     );
 
     final hoverSurfBob = game.powerUps.hasShield
-        ? math.sin(_elapsed * 6.0) * 3.5 - 5.0
+        ? math.sin(_elapsed * 5.8) * 3.5 - 5.0
         : 0.0;
 
     final footY = h / 2 - totalLiftPx - hopLiftPx + hoverSurfBob;
 
-    // 1. Sleek 3D Teal-and-Gold Subway Hoverboard beneath Soul's feet!
+    // 1. Radiant Celestial Golden Sun-Disk beneath Soul's feet (`hasShield`)!
     if (game.powerUps.hasShield) {
       canvas.save();
       canvas.translate(w / 2, footY + 3);
-      canvas.rotate(_lean * 0.22);
-      final bw = dw * 0.42;
-      final bh = dh * 0.095;
-      final board = Path()
-        ..moveTo(-bw, 0)
-        ..lineTo(-bw * 0.38, -bh)
-        ..lineTo(bw * 0.38, -bh)
-        ..lineTo(bw, 0)
-        ..lineTo(bw * 0.52, bh)
-        ..lineTo(-bw * 0.52, bh)
-        ..close();
-      canvas.drawPath(board, Paint()..color = const Color(0xFF26A4C4));
-      canvas.drawPath(
-        board,
+      canvas.rotate(_lean * 0.20);
+      final bw = dw * 0.44;
+      final bh = dh * 0.10;
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: bw * 2.2,
+          height: bh * 2.5,
+        ),
+        Paint()..color = const Color(0x55FFD058),
+      );
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: bw * 1.85,
+          height: bh * 1.9,
+        ),
+        Paint()..color = const Color(0xEEFFC446),
+      );
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: bw * 1.85,
+          height: bh * 1.9,
+        ),
         Paint()
-          ..color = const Color(0xFFFFD64E)
+          ..color = const Color(0xFFFFF6CC)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.6,
+          ..strokeWidth = 2.4,
       );
       canvas.restore();
     }
 
-    // 2. Super Sneakers emerald-gold foot rings when active!
+    // 2. Sky-Leap golden blessing ring around Soul's feet (`hasSuperSneakers`)
     if (game.powerUps.hasSuperSneakers && !game.powerUps.isSolarDashing) {
       canvas.drawOval(
         Rect.fromCenter(
           center: Offset(w / 2, footY + 2),
-          width: dw * 0.48,
+          width: dw * 0.50,
           height: dh * 0.11,
         ),
         Paint()
-          ..color = const Color(0xCC34B864)
+          ..color = const Color(0xDDFFDF72)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.6,
       );
@@ -239,20 +258,20 @@ class SoulPlayer extends PositionComponent
         slideDropPx +
         (sliding && isDedicatedPose ? dh * 0.05 : 0.0);
 
-    // 3. Jetpack golden-orange sky stream when flying high above trains!
+    // 3. Solar Comet Flight golden light trail (`isSolarDashing`)
     if (game.powerUps.isSolarDashing) {
       final tail = Path()
-        ..moveTo(w / 2 - dw * 0.18, bodyCenterY + dh * 0.16)
-        ..lineTo(w / 2 + dw * 0.18, bodyCenterY + dh * 0.16)
-        ..lineTo(w / 2, bodyCenterY + dh * 0.82)
+        ..moveTo(w / 2 - dw * 0.20, bodyCenterY + dh * 0.14)
+        ..lineTo(w / 2 + dw * 0.20, bodyCenterY + dh * 0.14)
+        ..lineTo(w / 2, bodyCenterY + dh * 0.85)
         ..close();
       canvas.drawPath(
         tail,
-        Paint()..color = const Color(0xAAFF9828),
+        Paint()..color = const Color(0xAAFFC44C),
       );
     }
 
-    // 4. Crisp character render
+    // 4. Pixar-3D Soul render
     canvas.save();
     canvas.translate(w / 2, bodyCenterY);
     canvas.rotate(_lean * GameConfig.playerLeanAngle);
@@ -271,16 +290,15 @@ class SoulPlayer extends PositionComponent
     );
     canvas.restore();
 
-    // 5. Magnet / Stumble indicators
     if (game.isStumbling) {
       final pulse = 0.55 + 0.45 * math.sin(_elapsed * 14).abs();
       canvas.drawCircle(
         Offset(w / 2, bodyCenterY + dh * 0.04),
         dw * 0.40,
         Paint()
-          ..color = const Color(0xFFE04840).withValues(alpha: 0.70 * pulse)
+          ..color = const Color(0xFFFF8864).withValues(alpha: 0.65 * pulse)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.4,
+          ..strokeWidth = 2.2,
       );
     } else if (game.powerUps.hasMagnet) {
       final pulse = 1 + math.sin(_elapsed * 8) * 0.04;
@@ -288,7 +306,7 @@ class SoulPlayer extends PositionComponent
         Offset(w / 2, bodyCenterY + dh * 0.02),
         dw * 0.39 * pulse,
         Paint()
-          ..color = const Color(0x992898D8)
+          ..color = const Color(0x99C49BFF)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.2,
       );

@@ -7,11 +7,10 @@ import '../../game/soul_dusk_run_game.dart';
 import '../overlays/game_over_overlay.dart';
 import '../overlays/pause_overlay.dart';
 
-/// Hosts the Flame game, instant zero-lag 4-way Subway-Surfers pointer routing
-/// (swipe left/right, swipe up to jump, swipe down to roll/fast-fall,
-/// chainable L-swipes, center double-tap Hoverboard), sunlit crisp HUD pills,
-/// and active power-up timers (S15: Jetpack, Super Sneakers, Magnet, 2x,
-/// and Solar Hoverboard).
+/// Hosts `SOUL: DUSK RUN` (`0.16.0+16`), matching the Official Concept Board's
+/// `حین بازی` HUD layout (clean golden orb/score badge top-left, circular pause
+/// top-right, radiant Sun-Shield button bottom-left/right, and translucent
+/// twilight-gold fantasy badges).
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, this.world = GameWorld.duskHollow});
 
@@ -109,7 +108,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                 child: GameWidget<SoulDuskRunGame>(
                   game: _game,
                   errorBuilder: (context, error) => Material(
-                    color: const Color(0xFF1C2C44),
+                    color: const Color(0xFF1E1633),
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
@@ -159,9 +158,9 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         ),
                       if (_game.isRunStarted && !_game.isEnded)
                         Positioned(
-                          right: 16,
+                          left: 16,
                           bottom: bottomPad + 20,
-                          child: _HoverboardButton(game: _game),
+                          child: _SunShieldOrbButton(game: _game),
                         ),
                     ],
                   );
@@ -170,11 +169,15 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
 
               Positioned(
                 top: topPad + 8,
-                right: 8,
+                right: 10,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xAA1C2C44),
-                    borderRadius: BorderRadius.circular(22),
+                    color: const Color(0x9924183C),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0x66FFE29E),
+                      width: 1.2,
+                    ),
                   ),
                   child: IconButton(
                     tooltip: 'Pause',
@@ -182,7 +185,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                     icon: const Icon(
                       Icons.pause_rounded,
                       color: Color(0xFFFFF8EB),
-                      size: 28,
+                      size: 26,
                     ),
                   ),
                 ),
@@ -212,17 +215,34 @@ class _TopHudBar extends StatelessWidget {
           runSpacing: 6,
           children: [
             _HudPill(
-              borderColor: const Color(0xCCFFFFFF),
+              borderColor: const Color(0xAAFFE29A),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [Color(0xFFFFFBE0), Color(0xFFFFB838)],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xAAFFB838),
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 7),
                   Text(
-                    '${game.score.totalScore}'.padLeft(5, '0'),
+                    '${game.score.totalScore}',
                     style: const TextStyle(
                       color: Color(0xFFFFF8EB),
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.1,
+                      letterSpacing: 0.8,
                     ),
                   ),
                   if (p.hasMultiplier) ...[
@@ -233,13 +253,13 @@ class _TopHudBar extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFB82E),
+                        color: const Color(0xFFFFC446),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
                         '2x',
                         style: TextStyle(
-                          color: Color(0xFF1C2C44),
+                          color: Color(0xFF24183C),
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                         ),
@@ -250,22 +270,22 @@ class _TopHudBar extends StatelessWidget {
               ),
             ),
             _HudPill(
-              borderColor: const Color(0xDDFFD65C),
+              borderColor: const Color(0x88D8B8FF),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(
                     Icons.wb_sunny_rounded,
-                    size: 17,
-                    color: Color(0xFFFFD65C),
+                    size: 16,
+                    color: Color(0xFFFFD666),
                   ),
                   const SizedBox(width: 5),
                   Text(
                     '${game.score.orbsCollected}',
                     style: const TextStyle(
-                      color: Color(0xFFFFECA6),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFFFECA8),
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -280,31 +300,31 @@ class _TopHudBar extends StatelessWidget {
           children: [
             if (p.isSolarDashing)
               _ActiveTimerBadge(
-                label: 'JETPACK',
+                label: 'SOLAR WINGS',
                 remaining: p.dashRemaining,
                 total: p.solarDashDuration,
-                color: const Color(0xFFFF7A38),
+                color: const Color(0xFFFF9E4C),
               ),
             if (p.hasSuperSneakers)
               _ActiveTimerBadge(
-                label: 'SNEAKERS',
+                label: 'SKY LEAP',
                 remaining: p.sneakersRemaining,
                 total: p.superSneakersDuration,
-                color: const Color(0xFF42D678),
+                color: const Color(0xFF72F2DC),
               ),
             if (p.hasMagnet)
               _ActiveTimerBadge(
-                label: 'MAGNET',
+                label: 'LIGHT AURA',
                 remaining: p.magnetRemaining,
                 total: p.magnetDuration,
-                color: const Color(0xFF48B8F0),
+                color: const Color(0xFFC49BFF),
               ),
             if (p.hasMultiplier)
               _ActiveTimerBadge(
-                label: '2x SCORE',
+                label: '2x LIGHT',
                 remaining: p.multiplierRemaining,
                 total: p.multiplierDuration,
-                color: const Color(0xFFFFCA42),
+                color: const Color(0xFFFFCF5C),
               ),
           ],
         ),
@@ -324,13 +344,13 @@ class _HudPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xD41C2C44),
+        color: const Color(0xB824183C),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: borderColor, width: 1.4),
+        border: Border.all(color: borderColor, width: 1.2),
         boxShadow: const [
           BoxShadow(
             color: Color(0x38000000),
-            blurRadius: 6,
+            blurRadius: 8,
             offset: Offset(0, 2),
           ),
         ],
@@ -357,12 +377,12 @@ class _ActiveTimerBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final ratio = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
     return Container(
-      width: 100,
+      width: 104,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xD81C2C44),
+        color: const Color(0xC824183C),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color, width: 1.2),
+        border: Border.all(color: color, width: 1.1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,7 +392,7 @@ class _ActiveTimerBadge extends StatelessWidget {
             '$label ${remaining.ceil()}s',
             style: TextStyle(
               color: color,
-              fontSize: 10.5,
+              fontSize: 10,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.4,
             ),
@@ -401,13 +421,13 @@ class _StartPromptBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xDD1C2C44),
+        color: const Color(0xCC24183C),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFFFD65C), width: 1.8),
+        border: Border.all(color: const Color(0xDDFFD66E), width: 1.6),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x44000000),
-            blurRadius: 12,
+            color: Color(0x48000000),
+            blurRadius: 14,
             offset: Offset(0, 4),
           ),
         ],
@@ -416,22 +436,22 @@ class _StartPromptBanner extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'TAP TO RUN',
+            'TAP TO FIND YOUR LIGHT',
             style: TextStyle(
-              color: Color(0xFFFFEEAA),
-              fontSize: 19,
+              color: Color(0xFFFFEEAE),
+              fontSize: 17,
               fontWeight: FontWeight.w900,
-              letterSpacing: 1.8,
+              letterSpacing: 1.5,
             ),
           ),
           SizedBox(height: 4),
           Text(
-            '◀ ▶ LANE   •   ▲ JUMP   •   ▼ ROLL   •   2× BOARD',
+            '◀ ▶ LANE   •   ▲ LEAP   •   ▼ SLIDE   •   2× SUN SHIELD',
             style: TextStyle(
-              color: Color(0xFFE6F4FF),
-              fontSize: 11,
+              color: Color(0xFFEDE4FF),
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
+              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -440,8 +460,10 @@ class _StartPromptBanner extends StatelessWidget {
   }
 }
 
-class _HoverboardButton extends StatelessWidget {
-  const _HoverboardButton({required this.game});
+/// Circular golden emblem button at bottom-left matching `حین بازی` on the
+/// Official Concept Board!
+class _SunShieldOrbButton extends StatelessWidget {
+  const _SunShieldOrbButton({required this.game});
 
   final SoulDuskRunGame game;
 
@@ -450,54 +472,54 @@ class _HoverboardButton extends StatelessWidget {
     final p = game.powerUps;
     final active = p.hasShield;
     final ready = p.canActivateShield;
-    final label = active
-        ? 'BOARD ${p.shieldRemaining.ceil()}s'
-        : ready
-            ? 'HOVERBOARD'
-            : '${p.shieldCooldownRemaining.ceil()}s';
     final accent = active
-        ? const Color(0xFF48D4F4)
+        ? const Color(0xFFFFE484)
         : ready
-            ? const Color(0xFFFFD65C)
-            : const Color(0x88B0BCCB);
+            ? const Color(0xFFFFC854)
+            : const Color(0x77B8AED0);
+
+    final subText = active
+        ? '${p.shieldRemaining.ceil()}s'
+        : ready
+            ? 'SHIELD'
+            : '${p.shieldCooldownRemaining.ceil()}s';
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: ready ? game.activateSolarShield : null,
-        borderRadius: BorderRadius.circular(24),
+        customBorder: const CircleBorder(),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          width: 58,
+          height: 58,
           decoration: BoxDecoration(
-            color: const Color(0xDD1C2C44),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: accent, width: 1.6),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x38000000),
-                blurRadius: 8,
-                offset: Offset(0, 2),
-              ),
+            shape: BoxShape.circle,
+            color: const Color(0xCC24183C),
+            border: Border.all(color: accent, width: 2.0),
+            boxShadow: [
+              if (ready || active)
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.42),
+                  blurRadius: 12,
+                ),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.surfing_rounded,
-                size: 18,
+                Icons.auto_awesome_rounded,
+                size: 22,
                 color: accent,
               ),
-              const SizedBox(width: 6),
               Text(
-                label,
+                subText,
                 style: TextStyle(
                   color: ready || active
                       ? const Color(0xFFFFF8EB)
-                      : const Color(0xAAB8C6D8),
-                  fontSize: 12.5,
+                      : const Color(0x99C4BCDA),
+                  fontSize: 9.5,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.7,
                 ),
               ),
             ],

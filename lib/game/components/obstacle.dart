@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -7,13 +8,18 @@ import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 import '../systems/obstacle_spawner.dart';
 
-/// S15 Subway-Surfers-Grade 3D Obstacles & Walkable Extruded Trains:
-///  * [ObstacleKind.lowSpikes] — Red & White 3D track hurdle (jump over);
-///  * [ObstacleKind.highArch] — Brass & Teal 3D roll gate (slide under);
-///  * [ObstacleKind.tallMonolith] — True 8-vertex `1/Z` 3D extruded Subway
-///    Train (parked Royal-Blue or oncoming Crimson Express; walkable roof!);
-///  * [ObstacleKind.trainWithRamp] — True 3D extruded Subway Train with a
-///    6-vertex sloped wooden Boarding Ramp in front -> climb onto the roof!
+/// S16 Cinematic `SOUL: DUSK RUN` 3D Fantasy Obstacles & Walkable Ancient
+/// Stone Sanctuary Platforms (matching the Official Concept Board 1-to-1):
+///  * [ObstacleKind.lowSpikes] — Pre-rendered 3D Dark Obsidian & Glowing
+///    Crystal Spike Cluster (jump over);
+///  * [ObstacleKind.highArch] — Pre-rendered 3D Carved Ancient Stone Rune
+///    Archway Gate (slide/tuck under);
+///  * [ObstacleKind.tallMonolith] — True `1/Z` 3D Elevated Ancient Stone
+///    Sanctuary Platform (stationary world-stone block OR oncoming gliding
+///    Obsidian Sentinel Monolith; walkable stone top deck!);
+///  * [ObstacleKind.trainWithRamp] — True `1/Z` 3D Elevated Ancient Stone
+///    Sanctuary Platform with a Carved Stone Stair-Ramp in front -> run right
+///    up onto the rune-lit stone platform top!
 class Obstacle extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   Obstacle({
@@ -23,6 +29,15 @@ class Obstacle extends PositionComponent
     double initialDepth = 1.0,
   })  : _depth = initialDepth,
         super(priority: 1000);
+
+  static final Float64List _identityMatrix4 = Float64List.fromList(const [
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+  ]);
+  static final Uint16List _quadIndices =
+      Uint16List.fromList(const [0, 1, 3, 1, 2, 3]);
 
   final int lane;
   final ObstacleKind kind;
@@ -38,8 +53,6 @@ class Obstacle extends PositionComponent
   double get frontDepth => _depth;
   double get backDepth => _depth + GameConfig.trainLengthDepth;
 
-  /// Returns the walkable surface elevation (`0.0 .. trainRoofElevation`)
-  /// beneath Soul when Soul is aligned with this 3D ramp or train roof!
   double supportElevationForPlayer(
     double playerLane,
     double currentWorldElevation,
@@ -78,9 +91,9 @@ class Obstacle extends PositionComponent
       anchor = Anchor.bottomCenter;
       final base = game.size.x * GameConfig.entityWidthRatio;
       if (kind == ObstacleKind.lowSpikes) {
-        size = Vector2(base * 1.12, base * 0.82);
+        size = Vector2(base * 1.08, base * 0.92);
       } else {
-        size = Vector2(base * 1.26, base * 1.42);
+        size = Vector2(base * 1.42, base * 1.42);
       }
     }
     _applyProjection();
@@ -118,12 +131,10 @@ class Obstacle extends PositionComponent
     final elev = game.effectivePlayerElevation;
 
     if (isTrain) {
-      // Running above roof height clears the entire 3D train cleanly!
       if (elev >= GameConfig.trainRoofElevation * 0.76) {
         return;
       }
 
-      // 1. Frontal impact check at `zFront` (ONLY for unramped `tallMonolith`)
       if (kind == ObstacleKind.tallMonolith &&
           !_resolvedFrontImpact &&
           _depth <= 0.034 &&
@@ -144,7 +155,6 @@ class Obstacle extends PositionComponent
         }
       }
 
-      // 2. Side-wall bump check if Soul swipes sideways against a passing train
       if (!_resolvedSideBump &&
           _depth < -0.030 &&
           backDepth > 0.025 &&
@@ -159,7 +169,6 @@ class Obstacle extends PositionComponent
       return;
     }
 
-    // Standard 3D Hurdle / Roll Gate check
     if (!_resolvedFrontImpact && _depth <= 0.032 && _depth >= -0.028) {
       if (!_isClearedVertically(elev)) {
         final contactPoint =
@@ -198,10 +207,9 @@ class Obstacle extends PositionComponent
     if (isTrain) {
       position = Vector2.zero();
       scale = Vector2.all(1.0);
-      final playerAboveTrain =
+      final playerAbovePlatform =
           game.effectivePlayerElevation >= GameConfig.trainRoofElevation * 0.76;
-      if (playerAboveTrain && _depth <= 0.08 && backDepth >= -0.08) {
-        // Keep train underneath Soul (`priority = 2000`) while surfing on roof!
+      if (playerAbovePlatform && _depth <= 0.08 && backDepth >= -0.08) {
         priority = 1910;
       } else {
         priority = ((2.0 - _depth) * 1000).round();
@@ -225,11 +233,41 @@ class Obstacle extends PositionComponent
         kind == ObstacleKind.highArch ? basePriority + 90 : basePriority;
   }
 
+  ({Color modulate, Color sideWall, Color runeGlow}) get _worldStoneStyle {
+    if (isMoving) {
+      return (
+        modulate: const Color(0xFFB8789E),
+        sideWall: const Color(0xFF2C1C38),
+        runeGlow: const Color(0xFFFF784A),
+      );
+    }
+    switch (game.selectedWorld) {
+      case GameWorld.duskHollow:
+        return (
+          modulate: const Color(0xFFE0CEF6),
+          sideWall: const Color(0xFF3E3258),
+          runeGlow: const Color(0xFFFFD276),
+        );
+      case GameWorld.moonveilMarsh:
+        return (
+          modulate: const Color(0xFFBCEEEB),
+          sideWall: const Color(0xFF284A54),
+          runeGlow: const Color(0xFF7AF6E4),
+        );
+      case GameWorld.emberfallCanyon:
+        return (
+          modulate: const Color(0xFFFFD4A4),
+          sideWall: const Color(0xFF784A30),
+          runeGlow: const Color(0xFFFFCE64),
+        );
+    }
+  }
+
   @override
   void render(Canvas canvas) {
     super.render(canvas);
     if (isTrain) {
-      _renderExtruded3DTrainAndRamp(canvas);
+      _renderExtruded3DStonePlatform(canvas);
       return;
     }
     if (_depth > 1.03) {
@@ -258,12 +296,21 @@ class Obstacle extends PositionComponent
         canvas.drawOval(
           Rect.fromCenter(
             center: Offset(w / 2, h * 0.96),
-            width: dw * 0.84,
-            height: h * 0.13,
+            width: dw * 0.82,
+            height: h * 0.14,
           ),
           Paint()
-            ..color = const Color(0x663A342E).withValues(alpha: 0.42 * horizonAlpha),
+            ..color =
+                const Color(0x77160E24).withValues(alpha: 0.48 * horizonAlpha),
         );
+      }
+
+      final paint = Paint()
+        ..color = Color.fromARGB((horizonAlpha * 255).round(), 255, 255, 255)
+        ..filterQuality = FilterQuality.medium;
+      if (kind == ObstacleKind.highArch) {
+        paint.colorFilter =
+            ColorFilter.mode(_worldStoneStyle.modulate, BlendMode.modulate);
       }
 
       canvas.drawImageRect(
@@ -271,18 +318,16 @@ class Obstacle extends PositionComponent
         Rect.fromLTWH(
             0, 0, sprite.width.toDouble(), sprite.height.toDouble()),
         Rect.fromLTWH((w - dw) / 2, h - dh, dw, dh),
-        Paint()
-          ..color = Color.fromARGB((horizonAlpha * 255).round(), 255, 255, 255)
-          ..filterQuality = FilterQuality.medium,
+        paint,
       );
       return;
     }
 
-    _renderBarrierFallback(canvas, w, h);
+    _renderFallback(canvas, w, h);
   }
 
   // ---------------------------------------------------------------------------
-  // True 8-Vertex `1/Z` 3D Extruded Subway Train & 6-Vertex Boarding Ramp!
+  // True `1/Z` 3D Extruded Ancient Carved Stone Sanctuary Platform & Stair-Ramp
   // ---------------------------------------------------------------------------
   ({double xl, double xr, double yt, double yb, double sc}) _boxSlice(
       double d) {
@@ -290,27 +335,27 @@ class Obstacle extends PositionComponent
     final cx = game.laneXForDepth(lane.toDouble(), d);
     final yb = game.yForDepth(d);
     final hw = game.halfWidthForDepth(d) * GameConfig.laneSpreadRatio * 0.44;
-    final trainHRef =
+    final hRef =
         game.size.y * GameConfig.jumpHeightRatio * GameConfig.trainRoofElevation;
-    final yt = yb - trainHRef * sc;
+    final yt = yb - hRef * sc;
     return (xl: cx - hw, xr: cx + hw, yt: yt, yb: yb, sc: sc);
   }
 
-  void _renderExtruded3DTrainAndRamp(Canvas canvas) {
+  void _renderExtruded3DStonePlatform(Canvas canvas) {
     if (_depth > 1.03) {
       return;
     }
     final zbClamped = math.min(1.02, backDepth);
     final zfClamped = math.max(-0.24, _depth);
     if (zfClamped < zbClamped) {
-      _draw3DTrainBody(canvas, zfClamped, zbClamped);
+      _draw3DStoneBody(canvas, zfClamped, zbClamped);
     }
 
     if (kind == ObstacleKind.trainWithRamp) {
       final rFront = _depth - GameConfig.rampLengthDepth;
       final rBack = _depth;
       if (rFront < 1.02 && rBack > -0.22) {
-        _draw3DBoardingRamp(
+        _draw3DStoneStairRamp(
           canvas,
           math.max(-0.22, rFront),
           math.min(1.02, rBack),
@@ -319,43 +364,99 @@ class Obstacle extends PositionComponent
     }
   }
 
-  void _draw3DTrainBody(Canvas canvas, double zf, double zb) {
+  void _drawTexturedStoneQuad(
+    Canvas canvas,
+    Offset p0,
+    Offset p1,
+    Offset p2,
+    Offset p3, {
+    required Color fallbackColor,
+    required double alpha,
+    Color? tintOverlay,
+  }) {
+    final strip = game.trackStrip;
+    if (strip != null && alpha > 0.04) {
+      final sw = strip.width.toDouble();
+      final sh = strip.height.toDouble();
+      final pos = Float32List.fromList([
+        p0.dx, p0.dy,
+        p1.dx, p1.dy,
+        p2.dx, p2.dy,
+        p3.dx, p3.dy,
+      ]);
+      final tex = Float32List.fromList([
+        sw * 0.18, sh * 0.55,
+        sw * 0.82, sh * 0.55,
+        sw * 0.82, sh * 0.12,
+        sw * 0.18, sh * 0.12,
+      ]);
+      final verts = Vertices.raw(
+        VertexMode.triangles,
+        pos,
+        textureCoordinates: tex,
+        indices: _quadIndices,
+      );
+      canvas.drawVertices(
+        verts,
+        BlendMode.srcOver,
+        Paint()
+          ..color = Color.fromARGB((alpha * 255).round(), 255, 255, 255)
+          ..shader = ImageShader(
+            strip,
+            TileMode.clamp,
+            TileMode.clamp,
+            _identityMatrix4,
+            filterQuality: FilterQuality.medium,
+          ),
+      );
+      if (tintOverlay != null) {
+        final over = Path()
+          ..moveTo(p0.dx, p0.dy)
+          ..lineTo(p1.dx, p1.dy)
+          ..lineTo(p2.dx, p2.dy)
+          ..lineTo(p3.dx, p3.dy)
+          ..close();
+        canvas.drawPath(over, Paint()..color = tintOverlay);
+      }
+      return;
+    }
+
+    final quad = Path()
+      ..moveTo(p0.dx, p0.dy)
+      ..lineTo(p1.dx, p1.dy)
+      ..lineTo(p2.dx, p2.dy)
+      ..lineTo(p3.dx, p3.dy)
+      ..close();
+    canvas.drawPath(
+      quad,
+      Paint()..color = fallbackColor.withValues(alpha: alpha),
+    );
+  }
+
+  void _draw3DStoneBody(Canvas canvas, double zf, double zb) {
     final f = _boxSlice(zf);
     final b = _boxSlice(zb);
     final alpha = ((1.03 - zf) / 0.10).clamp(0.0, 1.0).toDouble();
+    final style = _worldStoneStyle;
 
-    final Color cFront;
-    final Color cSide;
-    final Color cRoof;
-    const cStripe = Color(0xFFFAD056);
-    if (isMoving) {
-      cFront = const Color(0xFFD63A36);
-      cSide = const Color(0xFFB22C2A);
-      cRoof = const Color(0xFFECE4DC);
-    } else {
-      cFront = const Color(0xFF2C70BA);
-      cSide = const Color(0xFF225898);
-      cRoof = const Color(0xFFE6ECF4);
-    }
-
-    final outlinePaint = Paint()
-      ..color = const Color(0xFF1A2434).withValues(alpha: alpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = (2.0 * f.sc).clamp(1.0, 3.0).toDouble();
-
-    // 1. Ground contact shadow under full 3D train footprint
+    // 1. Grounded ambient shadow under full 3D stone sanctuary block
     final shadowPath = Path()
-      ..moveTo(f.xl - 5 * f.sc, f.yb + 3)
-      ..lineTo(f.xr + 5 * f.sc, f.yb + 3)
+      ..moveTo(f.xl - 6 * f.sc, f.yb + 3)
+      ..lineTo(f.xr + 6 * f.sc, f.yb + 3)
       ..lineTo(b.xr + 4 * b.sc, b.yb + 2)
       ..lineTo(b.xl - 4 * b.sc, b.yb + 2)
       ..close();
     canvas.drawPath(
       shadowPath,
-      Paint()..color = const Color(0x6636302C).withValues(alpha: 0.48 * alpha),
+      Paint()..color = const Color(0x78140C24).withValues(alpha: 0.52 * alpha),
     );
 
-    // 2. Visible 3D Perspective Side Wall + Windows + Gold Belt Stripe
+    final outlinePaint = Paint()
+      ..color = const Color(0xFF1A1228).withValues(alpha: alpha)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (1.8 * f.sc).clamp(1.0, 2.8).toDouble();
+
+    // 2. 3D Perspective Carved Stone Side Wall + Glowing Rune Ledge Trim
     for (final isRight in const [true, false]) {
       final visible = isRight ? (f.xr < b.xr - 1.2) : (f.xl > b.xl + 1.2);
       if (!visible) {
@@ -370,228 +471,173 @@ class Obstacle extends PositionComponent
         ..lineTo(xbS, b.yt)
         ..lineTo(xfS, f.yt)
         ..close();
-      canvas.drawPath(sidePath, Paint()..color = cSide.withValues(alpha: alpha));
+      canvas.drawPath(
+        sidePath,
+        Paint()..color = style.sideWall.withValues(alpha: alpha),
+      );
       canvas.drawPath(sidePath, outlinePaint);
 
-      final ymf1 = f.yt + (f.yb - f.yt) * 0.52;
-      final ymf2 = f.yt + (f.yb - f.yt) * 0.64;
-      final ymb1 = b.yt + (b.yb - b.yt) * 0.52;
-      final ymb2 = b.yt + (b.yb - b.yt) * 0.64;
-      final beltPath = Path()
-        ..moveTo(xfS, ymf1)
-        ..lineTo(xbS, ymb1)
-        ..lineTo(xbS, ymb2)
-        ..lineTo(xfS, ymf2)
-        ..close();
-      canvas.drawPath(
-          beltPath, Paint()..color = cStripe.withValues(alpha: alpha));
-
-      final winPaint = Paint()
-        ..color = const Color(0xFF24384E).withValues(alpha: alpha);
-      for (var wi = 0; wi < 3; wi++) {
-        final u0 = 0.10 + wi * 0.29;
-        final u1 = 0.31 + wi * 0.29;
-        final wx0 = xfS + (xbS - xfS) * u0;
-        final wx1 = xfS + (xbS - xfS) * u1;
-        final h0 = (f.yb - f.yt) * (1 - u0) + (b.yb - b.yt) * u0;
-        final h1 = (f.yb - f.yt) * (1 - u1) + (b.yb - b.yt) * u1;
-        final yt0 = f.yt + (b.yt - f.yt) * u0;
-        final yt1 = f.yt + (b.yt - f.yt) * u1;
-        final wPath = Path()
-          ..moveTo(wx0, yt0 + h0 * 0.16)
-          ..lineTo(wx1, yt1 + h1 * 0.16)
-          ..lineTo(wx1, yt1 + h1 * 0.45)
-          ..lineTo(wx0, yt0 + h0 * 0.45)
-          ..close();
-        canvas.drawPath(wPath, winPaint);
-      }
+      final yrf = f.yt + (f.yb - f.yt) * 0.18;
+      final yrb = b.yt + (b.yb - b.yt) * 0.18;
+      canvas.drawLine(
+        Offset(xfS, yrf),
+        Offset(xbS, yrb),
+        Paint()
+          ..color = style.runeGlow.withValues(alpha: 0.88 * alpha)
+          ..strokeWidth = (2.8 * f.sc).clamp(1.0, 4.0).toDouble(),
+      );
     }
 
-    // 3. Walkable 3D Roof Deck + Rooftop AC Vents
-    if (f.yt > b.yt) {
-      final roofPath = Path()
+    // 3. Walkable 3D Textured Ancient Stone Top Deck
+    if (f.yt > b.yt + 0.5) {
+      _drawTexturedStoneQuad(
+        canvas,
+        Offset(f.xl, f.yt),
+        Offset(f.xr, f.yt),
+        Offset(b.xr, b.yt),
+        Offset(b.xl, b.yt),
+        fallbackColor: style.modulate,
+        alpha: alpha,
+        tintOverlay: isMoving
+            ? const Color(0x442A0E24).withValues(alpha: 0.30 * alpha)
+            : null,
+      );
+      final roofOutline = Path()
         ..moveTo(f.xl, f.yt)
         ..lineTo(f.xr, f.yt)
         ..lineTo(b.xr, b.yt)
         ..lineTo(b.xl, b.yt)
         ..close();
-      canvas.drawPath(roofPath, Paint()..color = cRoof.withValues(alpha: alpha));
-      canvas.drawPath(roofPath, outlinePaint);
-
-      final ventFill = Paint()
-        ..color = const Color(0xFFC0CAD6).withValues(alpha: alpha);
-      for (final spanU in const [(0.16, 0.42), (0.56, 0.82)]) {
-        final u0 = spanU.$1;
-        final u1 = spanU.$2;
-        final w0 = (f.xr - f.xl) * (1 - u0) + (b.xr - b.xl) * u0;
-        final w1 = (f.xr - f.xl) * (1 - u1) + (b.xr - b.xl) * u1;
-        final axLf = f.xl + (b.xl - f.xl) * u0 + w0 * 0.22;
-        final axRf = f.xr + (b.xr - f.xr) * u0 - w0 * 0.22;
-        final axLb = f.xl + (b.xl - f.xl) * u1 + w1 * 0.22;
-        final axRb = f.xr + (b.xr - f.xr) * u1 - w1 * 0.22;
-        final ayF = f.yt + (b.yt - f.yt) * u0;
-        final ayB = f.yt + (b.yt - f.yt) * u1;
-        final vent = Path()
-          ..moveTo(axLf, ayF)
-          ..lineTo(axRf, ayF)
-          ..lineTo(axRb, ayB)
-          ..lineTo(axLb, ayB)
-          ..close();
-        canvas.drawPath(vent, ventFill);
-      }
+      canvas.drawPath(
+        roofOutline,
+        Paint()
+          ..color = style.runeGlow.withValues(alpha: 0.82 * alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (1.8 * f.sc).clamp(1.0, 2.8).toDouble(),
+      );
     }
 
-    // 4. Crisp Cab Front Face (drawn when front is ahead of camera clip)
+    // 4. Pre-Rendered 3D Carved Rune Stone Front Face!
     if (_depth >= -0.23) {
-      final fw = f.xr - f.xl;
-      final fh = f.yb - f.yt;
-
-      // Dark wheel bogie undercarriage
-      canvas.drawRect(
-        Rect.fromLTWH(
-            f.xl + fw * 0.12, f.yb - fh * 0.08, fw * 0.76, fh * 0.09),
-        Paint()..color = const Color(0xFF20242E).withValues(alpha: alpha),
-      );
-
-      final cabRRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(f.xl, f.yt, fw, fh * 0.96),
-        Radius.circular((fw * 0.10).clamp(3.0, 18.0).toDouble()),
-      );
-      canvas.drawRRect(
-          cabRRect, Paint()..color = cFront.withValues(alpha: alpha));
-      canvas.drawRRect(cabRRect, outlinePaint);
-
-      // Gold belt stripe
-      canvas.drawRect(
-        Rect.fromLTWH(f.xl + 2, f.yt + fh * 0.52, math.max(0, fw - 4), fh * 0.12),
-        Paint()..color = cStripe.withValues(alpha: alpha),
-      );
-
-      // Panoramic driver windshield + diagonal sky reflection
-      final glassRRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(f.xl + fw * 0.11, f.yt + fh * 0.14, fw * 0.78, fh * 0.32),
-        Radius.circular((fw * 0.06).clamp(2.0, 10.0).toDouble()),
-      );
-      canvas.drawRRect(
-        glassRRect,
-        Paint()..color = const Color(0xFF22344A).withValues(alpha: alpha),
-      );
-      final glint = Path()
-        ..moveTo(f.xl + fw * 0.17, f.yt + fh * 0.43)
-        ..lineTo(f.xl + fw * 0.33, f.yt + fh * 0.43)
-        ..lineTo(f.xl + fw * 0.47, f.yt + fh * 0.17)
-        ..lineTo(f.xl + fw * 0.31, f.yt + fh * 0.17)
-        ..close();
-      canvas.drawPath(
-        glint,
-        Paint()..color = const Color(0x9984B2D6).withValues(alpha: 0.6 * alpha),
-      );
-
-      // Twin warm headlights & steel bumper
-      final hlR = (fw * 0.085).clamp(2.5, 14.0).toDouble();
-      final hlPaint = Paint()
-        ..color = const Color(0xFFFFF6BC).withValues(alpha: alpha);
-      for (final sHl in const [-1.0, 1.0]) {
-        canvas.drawCircle(
-          Offset((f.xl + f.xr) * 0.5 + sHl * fw * 0.27, f.yt + fh * 0.74),
-          hlR,
-          hlPaint,
+      final fw = math.max(2.0, f.xr - f.xl);
+      final fh = math.max(2.0, f.yb - f.yt);
+      final mono = game.obstacleMonolithSprite;
+      if (mono != null) {
+        final mw = mono.width.toDouble();
+        final mh = mono.height.toDouble();
+        canvas.drawImageRect(
+          mono,
+          Rect.fromLTWH(mw * 0.09, mh * 0.185, mw * 0.82, mh * 0.785),
+          Rect.fromLTWH(f.xl, f.yt, fw, fh),
+          Paint()
+            ..color = Color.fromARGB((alpha * 255).round(), 255, 255, 255)
+            ..colorFilter = ColorFilter.mode(style.modulate, BlendMode.modulate)
+            ..filterQuality = FilterQuality.medium,
+        );
+      } else {
+        canvas.drawRect(
+          Rect.fromLTWH(f.xl, f.yt, fw, fh),
+          Paint()..color = style.sideWall.withValues(alpha: alpha),
         );
       }
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-              f.xl - fw * 0.03, f.yb - fh * 0.14, fw * 1.06, fh * 0.11),
-          const Radius.circular(3),
-        ),
-        Paint()..color = const Color(0xFF586274).withValues(alpha: alpha),
+      // Glowing rune cornice along top front edge
+      canvas.drawRect(
+        Rect.fromLTWH(f.xl, f.yt, fw, math.max(2.0, 4.0 * f.sc)),
+        Paint()..color = style.runeGlow.withValues(alpha: 0.92 * alpha),
       );
     }
   }
 
-  void _draw3DBoardingRamp(Canvas canvas, double zf, double zb) {
+  void _draw3DStoneStairRamp(Canvas canvas, double zf, double zb) {
     final f = _boxSlice(zf);
     final b = _boxSlice(zb);
     final alpha = ((1.03 - zf) / 0.10).clamp(0.0, 1.0).toDouble();
+    final style = _worldStoneStyle;
 
-    final sidePaint = Paint()
-      ..color = const Color(0xFF805226).withValues(alpha: alpha);
+    // Carved stone side cheek wall
+    final cheekPaint = Paint()..color = style.sideWall.withValues(alpha: alpha);
     if (f.xr < b.xr - 1.0) {
       final wedge = Path()
         ..moveTo(f.xr, f.yb)
         ..lineTo(b.xr, b.yb)
         ..lineTo(b.xr, b.yt)
         ..close();
-      canvas.drawPath(wedge, sidePaint);
+      canvas.drawPath(wedge, cheekPaint);
     } else if (f.xl > b.xl + 1.0) {
       final wedge = Path()
         ..moveTo(f.xl, f.yb)
         ..lineTo(b.xl, b.yb)
         ..lineTo(b.xl, b.yt)
         ..close();
-      canvas.drawPath(wedge, sidePaint);
+      canvas.drawPath(wedge, cheekPaint);
     }
 
-    final rampDeck = Path()
+    // Sloped textured stone staircase ramp deck (warm golden rune wash!)
+    _drawTexturedStoneQuad(
+      canvas,
+      Offset(f.xl, f.yb),
+      Offset(f.xr, f.yb),
+      Offset(b.xr, b.yt),
+      Offset(b.xl, b.yt),
+      fallbackColor: style.modulate,
+      alpha: alpha,
+      tintOverlay: style.runeGlow.withValues(alpha: 0.24 * alpha),
+    );
+
+    final rampBorder = Path()
       ..moveTo(f.xl, f.yb)
       ..lineTo(f.xr, f.yb)
       ..lineTo(b.xr, b.yt)
       ..lineTo(b.xl, b.yt)
       ..close();
     canvas.drawPath(
-      rampDeck,
-      Paint()..color = const Color(0xFFE8A63A).withValues(alpha: alpha),
-    );
-    canvas.drawPath(
-      rampDeck,
+      rampBorder,
       Paint()
-        ..color = const Color(0xFF3A2818).withValues(alpha: alpha)
+        ..color = style.runeGlow.withValues(alpha: 0.90 * alpha)
         ..style = PaintingStyle.stroke
         ..strokeWidth = (2.0 * f.sc).clamp(1.0, 3.0).toDouble(),
     );
 
-    // Wooden grip slats
-    final slatPaint = Paint()
-      ..color = const Color(0xFF9C6220).withValues(alpha: alpha)
-      ..strokeWidth = (2.2 * f.sc).clamp(1.0, 3.5).toDouble();
-    for (final u in const [0.25, 0.50, 0.75]) {
+    // Carved glowing stone stair-riser steps
+    final stepPaint = Paint()
+      ..color = style.runeGlow.withValues(alpha: 0.85 * alpha)
+      ..strokeWidth = (2.2 * f.sc).clamp(1.0, 3.2).toDouble();
+    for (final u in const [0.26, 0.52, 0.78]) {
       final ym = f.yb + (b.yt - f.yb) * u;
       final xml = f.xl + (b.xl - f.xl) * u + 4 * f.sc;
       final xmr = f.xr + (b.xr - f.xr) * u - 4 * f.sc;
-      canvas.drawLine(Offset(xml, ym), Offset(xmr, ym), slatPaint);
+      canvas.drawLine(Offset(xml, ym), Offset(xmr, ym), stepPaint);
     }
 
-    // Upward cream chevron arrow
-    final ymA = f.yb + (b.yt - f.yb) * 0.52;
-    final xmlA = f.xl + (b.xl - f.xl) * 0.52;
-    final xmrA = f.xr + (b.xr - f.xr) * 0.52;
+    // Upward radiant golden rune chevron
+    final ymA = f.yb + (b.yt - f.yb) * 0.50;
+    final xmlA = f.xl + (b.xl - f.xl) * 0.50;
+    final xmrA = f.xr + (b.xr - f.xr) * 0.50;
     final xmcA = (xmlA + xmrA) * 0.5;
     final arrow = Path()
-      ..moveTo(xmcA - (xmrA - xmlA) * 0.22, ymA + 7 * f.sc)
-      ..lineTo(xmcA + (xmrA - xmlA) * 0.22, ymA + 7 * f.sc)
-      ..lineTo(xmcA, ymA - 9 * f.sc)
+      ..moveTo(xmcA - (xmrA - xmlA) * 0.22, ymA + 6 * f.sc)
+      ..lineTo(xmcA + (xmrA - xmlA) * 0.22, ymA + 6 * f.sc)
+      ..lineTo(xmcA, ymA - 8 * f.sc)
       ..close();
     canvas.drawPath(
       arrow,
-      Paint()..color = const Color(0xFFFFF8DA).withValues(alpha: alpha),
+      Paint()..color = const Color(0xFFFFF4C2).withValues(alpha: alpha),
     );
   }
 
-  void _renderBarrierFallback(Canvas canvas, double w, double h) {
-    final fill = Paint()..color = const Color(0xFFE2443E);
+  void _renderFallback(Canvas canvas, double w, double h) {
+    final fill = Paint()..color = const Color(0xFF4C3A6E);
     if (kind == ObstacleKind.lowSpikes) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(w * 0.08, h * 0.36, w * 0.84, h * 0.34),
-          Radius.circular(w * 0.05),
-        ),
-        fill,
-      );
+      final spike = Path()
+        ..moveTo(w * 0.18, h)
+        ..lineTo(w * 0.50, h * 0.18)
+        ..lineTo(w * 0.82, h)
+        ..close();
+      canvas.drawPath(spike, fill);
     } else {
       canvas.drawRect(
-        Rect.fromLTWH(w * 0.04, h * 0.10, w * 0.92, h * 0.26),
-        Paint()..color = const Color(0xFF20728A),
+        Rect.fromLTWH(w * 0.06, h * 0.14, w * 0.88, h * 0.24),
+        fill,
       );
     }
   }
