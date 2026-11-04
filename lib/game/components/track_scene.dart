@@ -184,7 +184,7 @@ class TrackScene extends PositionComponent
         final sx = ((i * 0.371 + 0.11) % 1.0) * w + _skyParallaxX * 0.25;
         final sy = ((i * 0.619 + 0.04) % 1.0) * horizonY * 0.68;
         final twinkle =
-            0.45 + 0.55 * math.sin(game.elapsedSeconds * 2.1 + i * 1.7);
+            0.45 + 0.55 * math.sin(game.ambientSeconds * 2.1 + i * 1.7);
         canvas.drawCircle(
           Offset(sx % w, sy),
           (i % 3 == 0) ? 1.5 : 1.0,
@@ -302,7 +302,7 @@ class TrackScene extends PositionComponent
       final ch = cw * aspect;
       final spanW = w + cw * 1.3;
       final rawX = ((s.$1 * spanW +
-                  game.elapsedSeconds * w * s.$4 +
+                  game.ambientSeconds * w * s.$4 +
                   _skyParallaxX * 0.7) %
               spanW) -
           cw * 0.65;
@@ -405,7 +405,7 @@ class TrackScene extends PositionComponent
       final fade = ((1.03 - depth) / 0.18).clamp(0.0, 1.0).toDouble();
       final fogAmt = (depth * 0.46).clamp(0.08, 0.52).toDouble();
       final bob =
-          math.sin(game.elapsedSeconds * 1.1 + slotId * 2.1) * h * 0.008 * sc;
+          math.sin(game.ambientSeconds * 1.1 + slotId * 2.1) * h * 0.008 * sc;
 
       final cw = w * 0.62 * sc;
       final ch = cw * aspect;
@@ -471,7 +471,7 @@ class TrackScene extends PositionComponent
 
     final scrollV =
         (game.travelled / GameConfig.trackLength) * GameConfig.valleyTileRepeats;
-    final driftU = math.sin(game.elapsedSeconds * 0.45) * 0.08;
+    final driftU = math.sin(game.ambientSeconds * 0.45) * 0.08;
     final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
 
     var idx = 0;
@@ -644,7 +644,7 @@ class TrackScene extends PositionComponent
           fogAmount: fogAmt * 0.88,
         );
       } else if (island != null) {
-        final bob = math.sin(game.elapsedSeconds * 1.5 + worldSlot * 1.7) *
+        final bob = math.sin(game.ambientSeconds * 1.5 + worldSlot * 1.7) *
             h *
             0.008 *
             sc;
@@ -721,7 +721,7 @@ class TrackScene extends PositionComponent
       return;
     }
     final mistCol = _worldLightColor;
-    final t = game.elapsedSeconds * 0.25;
+    final t = game.ambientSeconds * 0.25;
     for (var i = 0; i < 3; i++) {
       final yFrac = horizonY + (h - horizonY) * (0.18 + i * 0.26);
       final driftX = math.sin(t + i * 2.1) * w * 0.14;
@@ -1215,7 +1215,7 @@ class TrackScene extends PositionComponent
     }
     final glowCol = _worldLightColor;
     final scroll = game.travelled / GameConfig.trackLength;
-    final t = game.elapsedSeconds;
+    final t = game.ambientSeconds;
 
     for (var i = 0; i < count; i++) {
       final seed = i * 0.6180339887;

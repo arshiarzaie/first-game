@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 
-/// Shown when the run ends. Displays the score and the PLAY AGAIN action.
-/// S1 UI shell: concept-board styled card (violet glass panel, gold score
-/// pill, warm coral CTA). Test contract: 'GAME OVER', `'Score: N'` and
-/// 'PLAY AGAIN' texts must remain findable.
+/// Shown when the run ends. Displays the score, PLAY AGAIN (launches Soul's
+/// sky-swoop straight back onto the bridge), and optional MAIN MENU (returns
+/// to the Living 3D Main Screen).
 class GameOverOverlay extends StatelessWidget {
   const GameOverOverlay({
     required this.score,
     required this.onPlayAgain,
+    this.onMainMenu,
     super.key,
   });
 
   final int score;
   final VoidCallback onPlayAgain;
+  final VoidCallback? onMainMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +92,25 @@ class GameOverOverlay extends StatelessWidget {
                   ),
                 ),
               ),
+              if (onMainMenu != null) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: onMainMenu,
+                  icon: const Icon(
+                    Icons.home_rounded,
+                    size: 18,
+                    color: Color(0xCCF6E7C8),
+                  ),
+                  label: const Text(
+                    'MAIN MENU',
+                    style: TextStyle(
+                      color: Color(0xCCF6E7C8),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

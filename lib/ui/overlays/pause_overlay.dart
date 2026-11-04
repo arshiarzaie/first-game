@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 /// Shown when the run is paused (pause button or app backgrounding).
-/// S1 UI shell: concept-board dim + styled card. Test contract: the
-/// 'PAUSED' and 'RESUME' texts must remain findable.
 class PauseOverlay extends StatelessWidget {
-  const PauseOverlay({required this.onResume, super.key});
+  const PauseOverlay({
+    required this.onResume,
+    this.onMainMenu,
+    super.key,
+  });
 
   final VoidCallback onResume;
+  final VoidCallback? onMainMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +68,25 @@ class PauseOverlay extends StatelessWidget {
                   ),
                 ),
               ),
+              if (onMainMenu != null) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: onMainMenu,
+                  icon: const Icon(
+                    Icons.home_rounded,
+                    size: 18,
+                    color: Color(0xCCF6E7C8),
+                  ),
+                  label: const Text(
+                    'MAIN MENU',
+                    style: TextStyle(
+                      color: Color(0xCCF6E7C8),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

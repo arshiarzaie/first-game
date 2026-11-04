@@ -41,11 +41,24 @@ class GameConfig {
   static const double scorePerWorldUnit = 0.025;
   static const int orbScore = 10;
 
-  // ---- S18 Low Over-the-Shoulder 3D Chase Camera (`3.60x` deep perspective) ----
+  // ---- S18/S19 Low Over-the-Shoulder 3D Chase Camera & Sky-Flight Intro ----
   static const double farDepthRatio = 3.60;
   static const double horizonRatio = 0.38;
   static const double playerPlaneRatio = 0.75;
   static const double farScale = 1.0 / farDepthRatio;
+
+  /// Extra sky framing on the Living Main Screen before camera swoops down.
+  static const double titleHorizonLiftRatio = 0.08;
+
+  /// Soul's living mid-air hover altitude on the Main Title Screen.
+  static const double titleHoverElevation = 1.44;
+
+  /// Peak soaring altitude reached right after clicking START before swooping
+  /// down onto the ancient stone causeway.
+  static const double introFlightPeakElevation = 1.84;
+
+  /// Duration of Soul's animated sky-flight -> bridge touchdown sequence.
+  static const double introFlightDurationSeconds = 1.24;
 
   /// Subtle sculpted 3D crown/arch of the ancient stone causeway.
   static const double bridgeArchRatio = 0.007;

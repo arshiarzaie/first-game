@@ -6,37 +6,54 @@ import '../../game/input/lane_gesture_controller.dart';
 import '../../game/soul_dusk_run_game.dart';
 import '../overlays/game_over_overlay.dart';
 import '../overlays/pause_overlay.dart';
+import 'settings_screen.dart';
+import 'world_select_screen.dart';
 
-/// Hosts `SOUL: DUSK RUN` (`0.16.0+16`), matching the Official Concept Board's
-/// `حین بازی` HUD layout (clean golden orb/score badge top-left, circular pause
-/// top-right, radiant Sun-Shield button bottom-left/right, and translucent
-/// twilight-gold fantasy badges).
+/// Unified Living 3D Main Screen & Gameplay Host (`0.19.0+19`):
+///  * **Main Screen (`isTitleHovering`)**: renders the live 9-layer 3D world
+///    with Soul hovering alive in the sky, paired with `SOUL: DUSK RUN`,
+///    `WORLDS`, `Settings`, and the glowing `START` button;
+///  * **On `START` click**: fades out the title UI while Soul arcs upward,
+///    flies down onto the stone bridge, and transitions seamlessly into full
+///    ground running with the gameplay HUD!
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key, this.world = GameWorld.duskHollow});
+  const GameScreen({
+    super.key,
+    this.world = GameWorld.duskHollow,
+    this.startInTitleHover = true,
+  });
 
   final GameWorld world;
+  final bool startInTitleHover;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
 }
 
 class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
-  late final SoulDuskRunGame _game;
-  late final LaneGestureController _gestures;
+  late GameWorld _activeWorld;
+  late SoulDuskRunGame _game;
+  late LaneGestureController _gestures;
 
   @override
   void initState() {
     super.initState();
-    _game = SoulDuskRunGame(selectedWorld: widget.world);
+    _activeWorld = widget.world;
+    _initGame(startInTitleHover: widget.startInTitleHover);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  void _initGame({required bool startInTitleHover}) {
+    _game = SoulDuskRunGame(
+      selectedWorld: _activeWorld,
+      startInTitleHover: startInTitleHover,
+    );
     _gestures = LaneGestureController(
       onMove: _game.moveLane,
       onJump: _game.jump,
       onSlide: _game.slide,
       onDoubleTap: _game.activateSolarShield,
-      isRunStarted: () => _game.isRunStarted,
-      onStartRun: _game.startRun,
     );
-    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -55,6 +72,54 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _openSettings() async {
+    _game.pauseEngine();
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const SettingsScreen(),
+      ),
+    );
+    if (mounted && !_game.isEnded) {
+      _game.resumeEngine();
+    }
+  }
+
+  Future<void> _openWorldSelect() async {
+    _game.pauseEngine();
+    final chosen = await Navigator.of(context).push<GameWorld>(
+      MaterialPageRoute<GameWorld>(
+        builder: (_) => WorldSelectScreen(
+          currentWorld: _activeWorld,
+          popWithSelection: true,
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (chosen != null && chosen != _activeWorld) {
+      final oldNotifier = _game.hudTick;
+      setState(() {
+        _activeWorld = chosen;
+        _initGame(startInTitleHover: true);
+      });
+      oldNotifier.dispose();
+    } else if (!_game.isEnded) {
+      _game.resumeEngine();
+    }
+  }
+
+  static String _worldDisplayName(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 'DUSK HOLLOW';
+      case GameWorld.moonveilMarsh:
+        return 'MOONVEIL MARSH';
+      case GameWorld.emberfallCanyon:
+        return 'EMBERFALL CANYON';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
@@ -70,7 +135,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
               Listener(
                 behavior: HitTestBehavior.opaque,
                 onPointerDown: (event) {
-                  if (_game.paused || _game.isEnded) {
+                  if (_game.paused || _game.isEnded || _game.isTitleHovering) {
                     return;
                   }
                   _gestures.onPointerDown(
@@ -80,7 +145,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   );
                 },
                 onPointerMove: (event) {
-                  if (_game.paused || _game.isEnded) {
+                  if (_game.paused || _game.isEnded || _game.isTitleHovering) {
                     return;
                   }
                   _gestures.onPointerMove(
@@ -90,7 +155,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   );
                 },
                 onPointerUp: (event) {
-                  if (_game.paused || _game.isEnded) {
+                  if (_game.paused || _game.isEnded || _game.isTitleHovering) {
                     _gestures.onPointerCancel(event.pointer);
                     return;
                   }
@@ -106,6 +171,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   _gestures.onPointerCancel(event.pointer);
                 },
                 child: GameWidget<SoulDuskRunGame>(
+                  key: ValueKey<GameWorld>(_activeWorld),
                   game: _game,
                   errorBuilder: (context, error) => Material(
                     color: const Color(0xFF1E1633),
@@ -128,9 +194,13 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         GameOverOverlay(
                           score: game.score.totalScore,
                           onPlayAgain: game.resetRun,
+                          onMainMenu: game.returnToTitleHover,
                         ),
                     SoulDuskRunGame.pauseOverlayId: (context, game) =>
-                        PauseOverlay(onResume: game.resumeFromMenu),
+                        PauseOverlay(
+                          onResume: game.resumeFromMenu,
+                          onMainMenu: game.returnToTitleHover,
+                        ),
                   },
                 ),
               ),
@@ -138,62 +208,318 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
               ValueListenableBuilder<int>(
                 valueListenable: _game.hudTick,
                 builder: (context, _, _) {
+                  final inTitle = _game.isTitleHovering;
+                  final inGameplay = !_game.isTitleHovering && !_game.isEnded;
+
                   return Stack(
                     fit: StackFit.expand,
                     children: [
-                      Positioned(
-                        top: topPad + 12,
-                        left: 14,
-                        right: 60,
-                        child: IgnorePointer(
-                          child: _TopHudBar(game: _game),
-                        ),
-                      ),
-                      if (!_game.isRunStarted && !_game.isEnded)
-                        const IgnorePointer(
-                          child: Align(
-                            alignment: Alignment(0, 0.14),
-                            child: _StartPromptBanner(),
+                      // 1. Living 3D Main Screen Overlay (fades out on START!)
+                      IgnorePointer(
+                        ignoring: !inTitle,
+                        child: AnimatedOpacity(
+                          opacity: inTitle ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 280),
+                          curve: Curves.easeOutCubic,
+                          child: _LivingTitleOverlay(
+                            worldLabel: _worldDisplayName(_activeWorld),
+                            onStart: _game.startRun,
+                            onOpenWorlds: _openWorldSelect,
+                            onOpenSettings: _openSettings,
                           ),
                         ),
-                      if (_game.isRunStarted && !_game.isEnded)
-                        Positioned(
-                          left: 16,
-                          bottom: bottomPad + 20,
-                          child: _SunShieldOrbButton(game: _game),
+                      ),
+
+                      // 2. Gameplay HUD (fades in smoothly as Soul flies in!)
+                      IgnorePointer(
+                        ignoring: !inGameplay,
+                        child: AnimatedOpacity(
+                          opacity: inGameplay ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeOutCubic,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Positioned(
+                                top: topPad + 12,
+                                left: 14,
+                                right: 60,
+                                child: IgnorePointer(
+                                  child: _TopHudBar(game: _game),
+                                ),
+                              ),
+                              if (_game.isGroundRunning)
+                                Positioned(
+                                  left: 16,
+                                  bottom: bottomPad + 20,
+                                  child: _SunShieldOrbButton(game: _game),
+                                ),
+                              Positioned(
+                                top: topPad + 8,
+                                right: 10,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0x9924183C),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0x66FFE29E),
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  child: IconButton(
+                                    tooltip: 'Pause',
+                                    onPressed: _game.pauseWithMenu,
+                                    icon: const Icon(
+                                      Icons.pause_rounded,
+                                      color: Color(0xFFFFF8EB),
+                                      size: 26,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                      ),
                     ],
                   );
                 },
-              ),
-
-              Positioned(
-                top: topPad + 8,
-                right: 10,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0x9924183C),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0x66FFE29E),
-                      width: 1.2,
-                    ),
-                  ),
-                  child: IconButton(
-                    tooltip: 'Pause',
-                    onPressed: _game.pauseWithMenu,
-                    icon: const Icon(
-                      Icons.pause_rounded,
-                      color: Color(0xFFFFF8EB),
-                      size: 26,
-                    ),
-                  ),
-                ),
               ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+/// Overlay shown over the live 3D world while Soul hovers alive in the sky.
+class _LivingTitleOverlay extends StatelessWidget {
+  const _LivingTitleOverlay({
+    required this.worldLabel,
+    required this.onStart,
+    required this.onOpenWorlds,
+    required this.onOpenSettings,
+  });
+
+  final String worldLabel;
+  final VoidCallback onStart;
+  final VoidCallback onOpenWorlds;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Subtle top & bottom readability vignettes (leaving center 100% clear
+        // so Living Hovering Soul shines unobstructed!).
+        const Align(
+          alignment: Alignment.topCenter,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x88100A22), Color(0x00100A22)],
+                ),
+              ),
+              child: SizedBox(width: double.infinity, height: 190),
+            ),
+          ),
+        ),
+        const Align(
+          alignment: Alignment.bottomCenter,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x00100A22), Color(0xBF100A22)],
+                ),
+              ),
+              child: SizedBox(width: double.infinity, height: 210),
+            ),
+          ),
+        ),
+        SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Row(
+                  children: [
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: onOpenWorlds,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xAA24183C),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0x99FFD166),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.public_rounded,
+                                size: 17,
+                                color: Color(0xFFFFD166),
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'WORLDS',
+                                style: TextStyle(
+                                  color: Color(0xFFF6E7C8),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.8,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0x9924183C),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0x66FFE29E),
+                          width: 1.1,
+                        ),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.settings,
+                          color: Color(0xE6F6E7C8),
+                        ),
+                        tooltip: 'Settings',
+                        onPressed: onOpenSettings,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'SOUL: DUSK RUN',
+                textAlign: TextAlign.center,
+                style: textTheme.headlineMedium?.copyWith(
+                  color: const Color(0xFFFFF4D8),
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 3.2,
+                  shadows: const [
+                    Shadow(
+                      color: Color(0xCC120824),
+                      blurRadius: 14,
+                      offset: Offset(0, 3),
+                    ),
+                    Shadow(
+                      color: Color(0x88FFAA52),
+                      blurRadius: 22,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Run · Explore · Find Your Light',
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xDCF6E7C8),
+                  letterSpacing: 1.1,
+                  shadows: const [
+                    Shadow(
+                      color: Color(0xAA000000),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0x7724183C),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0x55FFD166),
+                  ),
+                ),
+                child: Text(
+                  worldLabel,
+                  style: const TextStyle(
+                    color: Color(0xFFFFDC8A),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2.2,
+                  ),
+                ),
+              ),
+
+              // Open center viewport showcasing Living Hovering Soul!
+              const Spacer(),
+
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x77FFA854),
+                      blurRadius: 24,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: FilledButton.icon(
+                  onPressed: onStart,
+                  icon: const Icon(Icons.play_arrow_rounded, size: 26),
+                  label: const Text('START'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFAB5E),
+                    foregroundColor: const Color(0xFF241327),
+                    textStyle: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 3.0,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 52,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Tap START to soar into the dusk',
+                style: textTheme.bodySmall?.copyWith(
+                  color: const Color(0xCCF6E7C8),
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 22),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -405,53 +731,6 @@ class _ActiveTimerBadge extends StatelessWidget {
               minHeight: 4,
               backgroundColor: const Color(0x33FFFFFF),
               valueColor: AlwaysStoppedAnimation<Color>(color),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StartPromptBanner extends StatelessWidget {
-  const _StartPromptBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xCC24183C),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xDDFFD66E), width: 1.6),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x48000000),
-            blurRadius: 14,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'TAP TO FIND YOUR LIGHT',
-            style: TextStyle(
-              color: Color(0xFFFFEEAE),
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.5,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            '◀ ▶ LANE   •   ▲ LEAP   •   ▼ SLIDE   •   2× SUN SHIELD',
-            style: TextStyle(
-              color: Color(0xFFEDE4FF),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
             ),
           ),
         ],

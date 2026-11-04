@@ -4,13 +4,22 @@ import '../../game/config/game_config.dart';
 import '../../game/systems/progress_store.dart';
 import 'game_screen.dart';
 
-/// World Select screen (S3 shell; S4/S7 worlds; S8 sun-gating): the
-/// three world cards per concept board. Dusk Hollow is always open;
-/// Moonveil Marsh and Emberfall Canyon unlock once the player has
-/// banked enough suns (energy orbs) across runs — thresholds in
-/// GameConfig.worldUnlockSunsFor.
+/// World Select screen (`0.19.0+19`): lists the three fantasy biomes
+/// (`Dusk Hollow`, `Moonveil Marsh`, `Emberfall Canyon`) with banked-sun
+/// unlock thresholds (`0`, `25`, `60`).
+///
+/// When opened from the Living 3D Main Screen ([popWithSelection] = `true`),
+/// tapping an unlocked world pops that [GameWorld] back so the single active
+/// 3D scene switches worlds cleanly without stacking duplicate game instances.
 class WorldSelectScreen extends StatefulWidget {
-  const WorldSelectScreen({super.key});
+  const WorldSelectScreen({
+    super.key,
+    this.currentWorld,
+    this.popWithSelection = false,
+  });
+
+  final GameWorld? currentWorld;
+  final bool popWithSelection;
 
   @override
   State<WorldSelectScreen> createState() => _WorldSelectScreenState();
@@ -27,6 +36,18 @@ class _WorldSelectScreenState extends State<WorldSelectScreen> {
         setState(() => _progress = store);
       }
     });
+  }
+
+  void _selectWorld(GameWorld world) {
+    if (widget.popWithSelection) {
+      Navigator.of(context).pop(world);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GameScreen(world: world),
+      ),
+    );
   }
 
   @override
@@ -74,7 +95,7 @@ class _WorldSelectScreenState extends State<WorldSelectScreen> {
                   fontSize: 36,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 6,
-                  color: Color(0xFFFFD166), // Soul gold
+                  color: Color(0xFFFFD166),
                   shadows: [
                     Shadow(
                       color: Color(0x99FF9F68),
@@ -95,13 +116,9 @@ class _WorldSelectScreenState extends State<WorldSelectScreen> {
                           imageAsset: 'assets/images/ui/world_dusk_hollow.png',
                           accent: const Color(0xFFFFD166),
                           unlocked: true,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const GameScreen(),
-                              ),
-                            );
-                          },
+                          isSelected:
+                              widget.currentWorld == GameWorld.duskHollow,
+                          onTap: () => _selectWorld(GameWorld.duskHollow),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -113,19 +130,12 @@ class _WorldSelectScreenState extends State<WorldSelectScreen> {
                           unlocked: suns >=
                               GameConfig.worldUnlockSunsFor(
                                   GameWorld.moonveilMarsh),
-                          requirement:
-                              GameConfig.worldUnlockSunsFor(
-                                  GameWorld.moonveilMarsh),
+                          isSelected:
+                              widget.currentWorld == GameWorld.moonveilMarsh,
+                          requirement: GameConfig.worldUnlockSunsFor(
+                              GameWorld.moonveilMarsh),
                           currentSuns: suns,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const GameScreen(
-                                  world: GameWorld.moonveilMarsh,
-                                ),
-                              ),
-                            );
-                          },
+                          onTap: () => _selectWorld(GameWorld.moonveilMarsh),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -137,19 +147,12 @@ class _WorldSelectScreenState extends State<WorldSelectScreen> {
                           unlocked: suns >=
                               GameConfig.worldUnlockSunsFor(
                                   GameWorld.emberfallCanyon),
-                          requirement:
-                              GameConfig.worldUnlockSunsFor(
-                                  GameWorld.emberfallCanyon),
+                          isSelected:
+                              widget.currentWorld == GameWorld.emberfallCanyon,
+                          requirement: GameConfig.worldUnlockSunsFor(
+                              GameWorld.emberfallCanyon),
                           currentSuns: suns,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const GameScreen(
-                                  world: GameWorld.emberfallCanyon,
-                                ),
-                              ),
-                            );
-                          },
+                          onTap: () => _selectWorld(GameWorld.emberfallCanyon),
                         ),
                       ),
                     ],
@@ -171,6 +174,7 @@ class _WorldCard extends StatelessWidget {
     required this.imageAsset,
     required this.accent,
     required this.unlocked,
+    this.isSelected = false,
     this.requirement = 0,
     this.currentSuns = 0,
     this.onTap,
@@ -180,9 +184,7 @@ class _WorldCard extends StatelessWidget {
   final String imageAsset;
   final Color accent;
   final bool unlocked;
-
-  /// Suns needed to unlock (locked cards only) and current total shown
-  /// as progress (`$currentSuns / $requirement SUNS`).
+  final bool isSelected;
   final int requirement;
   final int currentSuns;
   final VoidCallback? onTap;
@@ -199,7 +201,6 @@ class _WorldCard extends StatelessWidget {
             fit: BoxFit.cover,
             errorBuilder: (_, _, _) => Container(color: const Color(0xFF241A40)),
           ),
-          // Bottom gradient for label readability.
           const Align(
             alignment: Alignment.bottomCenter,
             child: DecoratedBox(
@@ -213,6 +214,29 @@ class _WorldCard extends StatelessWidget {
               child: SizedBox(height: 96, width: double.infinity),
             ),
           ),
+          if (isSelected && unlocked)
+            Positioned(
+              top: 10,
+              right: 12,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xCC24183C),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accent, width: 1.2),
+                ),
+                child: Text(
+                  'ACTIVE',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.8,
+                    color: accent,
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             left: 16,
             bottom: 12,
@@ -270,7 +294,7 @@ class _WorldCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: unlocked ? accent : const Color(0x44FFFFFF),
-          width: 1.6,
+          width: isSelected ? 2.4 : 1.6,
         ),
         boxShadow: [
           BoxShadow(

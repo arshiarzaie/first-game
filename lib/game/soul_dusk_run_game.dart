@@ -21,12 +21,24 @@ import 'systems/progress_store.dart';
 import 'systems/score_manager.dart';
 import 'systems/vertical_motion.dart';
 
-/// Flame game root for `SOUL: DUSK RUN` (`0.18.0+18` — 100% Modular 3D Element
-/// World, Low Over-the-Shoulder Chase Camera, Full-Width `1/Z` 3D Water/Valley
-/// Plane, 3D Extruded Stone Causeway Curbs, Sky Citadels & Canyon Cliffs).
+/// Lifecycle stages of `SOUL: DUSK RUN` (`0.19.0+19`):
+///  * [RunStage.titleHover] — Main Screen: Soul floats alive in the 3D sky;
+///  * [RunStage.introFlight] — START clicked: Soul arcs through the sky,
+///    swoops gracefully down to the chiseled stone bridge as the camera glides
+///    into chase position;
+///  * [RunStage.running] — Soul lands on the bridge and sprints forward!
+enum RunStage { titleHover, introFlight, running }
+
+/// Flame game root for `SOUL: DUSK RUN` (`0.19.0+19` — Living 3D Main Screen,
+/// Cinematic Sky-Flight Descent to Ground Run, & 100% Modular 3D World).
 class SoulDuskRunGame extends FlameGame {
-  SoulDuskRunGame({int seed = 0, this.selectedWorld = GameWorld.duskHollow})
-      : _seed = seed;
+  SoulDuskRunGame({
+    int seed = 0,
+    this.selectedWorld = GameWorld.duskHollow,
+    bool startInTitleHover = true,
+  })  : _seed = seed,
+        _stage =
+            startInTitleHover ? RunStage.titleHover : RunStage.introFlight;
 
   final GameWorld selectedWorld;
 
@@ -66,6 +78,9 @@ class SoulDuskRunGame extends FlameGame {
   ui.Image? goldenCloudSprite;
   List<ui.Image> runFrames = const [];
 
+  RunStage _stage;
+  double _introProgress = 0;
+  double _ambientSeconds = 0;
   double _elapsedSeconds = 0;
   double _travelled = 0;
   double _distanceSinceWave = 0;
@@ -76,49 +91,101 @@ class SoulDuskRunGame extends FlameGame {
   double _stumbleTimer = 0;
   bool _ended = false;
   int _runNumber = 0;
-  bool _runStarted = false;
 
   ProgressStore? _progress;
 
+  RunStage get stage => _stage;
+  bool get isTitleHovering => _stage == RunStage.titleHover;
+  bool get isIntroFlying => _stage == RunStage.introFlight;
+  bool get isGroundRunning => _stage == RunStage.running;
+  bool get isRunStarted => _stage != RunStage.titleHover;
+  double get introFlightProgress => _introProgress;
+
+  double get ambientSeconds => _ambientSeconds;
   double get elapsedSeconds => _elapsedSeconds;
   double get travelled => _travelled;
   bool get isEnded => _ended;
-  bool get isRunStarted => _runStarted;
   bool get isStumbling => _stumbleTimer > 0;
   double get cameraLane => _cameraLane;
   double get baseSupportElevation => 0.0;
 
-  double get currentSpeed {
-    if (!_runStarted) {
-      return 0;
+  /// Smooth camera blend (`1.0` on Main Screen sky-gaze -> `0.0` in low chase).
+  double get introCameraBlend {
+    switch (_stage) {
+      case RunStage.titleHover:
+        return 1.0;
+      case RunStage.introFlight:
+        final u = _introProgress.clamp(0.0, 1.0).toDouble();
+        final s = u * u * (3.0 - 2.0 * u);
+        return 1.0 - s;
+      case RunStage.running:
+        return 0.0;
     }
-    final base = difficulty.speedAt(_elapsedSeconds);
-    return powerUps.isSolarDashing
-        ? base * GameConfig.solarDashSpeedBoost
-        : base;
+  }
+
+  double get currentSpeed {
+    switch (_stage) {
+      case RunStage.titleHover:
+        return 0.0;
+      case RunStage.introFlight:
+        final u = ((_introProgress - 0.08) / 0.92).clamp(0.0, 1.0).toDouble();
+        final smooth = u * u * (3.0 - 2.0 * u);
+        return GameConfig.startSpeed * (0.16 + 0.84 * smooth);
+      case RunStage.running:
+        final base = difficulty.speedAt(_elapsedSeconds);
+        return powerUps.isSolarDashing
+            ? base * GameConfig.solarDashSpeedBoost
+            : base;
+    }
   }
 
   double get effectivePlayerElevation {
-    if (powerUps.isSolarDashing) {
-      return 1.38;
+    switch (_stage) {
+      case RunStage.titleHover:
+        return GameConfig.titleHoverElevation +
+            math.sin(_ambientSeconds * 2.3) * 0.11 +
+            math.sin(_ambientSeconds * 1.15) * 0.04;
+      case RunStage.introFlight:
+        final u = _introProgress.clamp(0.0, 1.0).toDouble();
+        const startE = GameConfig.titleHoverElevation;
+        const peakE = GameConfig.introFlightPeakElevation;
+        const apexU = 0.26;
+        if (u < apexU) {
+          final tUp = u / apexU;
+          return startE + (peakE - startE) * math.sin(tUp * math.pi * 0.5);
+        }
+        final tDn = (u - apexU) / (1.0 - apexU);
+        final descent = 0.5 * (1.0 + math.cos(tDn * math.pi));
+        return peakE * descent + verticalMotion.jumpHeight;
+      case RunStage.running:
+        if (powerUps.isSolarDashing) {
+          return 1.38;
+        }
+        final jumpMult = powerUps.hasSuperSneakers
+            ? GameConfig.superSneakersJumpMultiplier
+            : 1.0;
+        return verticalMotion.jumpHeight * jumpMult;
     }
-    final jumpMult = powerUps.hasSuperSneakers
-        ? GameConfig.superSneakersJumpMultiplier
-        : 1.0;
-    return verticalMotion.jumpHeight * jumpMult;
   }
 
+  bool get _acceptsRunnerControls =>
+      _stage == RunStage.running ||
+      (_stage == RunStage.introFlight && _introProgress >= 0.78);
+
   // ---------------------------------------------------------------
-  // S18 Low Over-the-Shoulder `3.60x` 3D Chase Camera
+  // S18/S19 Low Over-the-Shoulder `3.60x` 3D Chase Camera
   // ---------------------------------------------------------------
 
-  double get horizonY => size.y * GameConfig.horizonRatio;
-  double get playerPlaneY => size.y * GameConfig.playerPlaneRatio;
+  double get horizonY =>
+      size.y *
+      (GameConfig.horizonRatio +
+          GameConfig.titleHorizonLiftRatio * introCameraBlend);
 
-  /// Smooth scenic winding S-curve factor (`-1..1`), `0.0` while idle before
-  /// the first tap so Soul stands symmetrically framed at run start.
+  double get playerPlaneY =>
+      size.y * (GameConfig.playerPlaneRatio + 0.03 * introCameraBlend);
+
   double get roadCurveFactor {
-    if (!_runStarted) {
+    if (_stage != RunStage.running) {
       return 0.0;
     }
     return math.sin(_travelled * 0.00135) * 0.65 +
@@ -163,8 +230,6 @@ class SoulDuskRunGame extends FlameGame {
     return horizonY + (playerPlaneY - horizonY) * t - archLiftForDepth(depth);
   }
 
-  /// Screen Y on the sunken 3D water/valley floor plane below the elevated
-  /// ancient stone causeway.
   double valleyYForDepth(double depth) {
     return yForDepth(depth) +
         size.y * GameConfig.valleyDropRatio * perspectiveFactor(depth);
@@ -305,10 +370,41 @@ class SoulDuskRunGame extends FlameGame {
     final camFollow = (1.0 - math.exp(-dt * 9.0)).clamp(0.0, 1.0).toDouble();
     _cameraLane += (player.currentLane - _cameraLane) * camFollow;
 
-    if (_ended || !_runStarted) {
+    if (_ended) {
       return;
     }
 
+    // Living ambient clock ALWAYS ticks so clouds, water, fireflies & Soul
+    // breathe and hover right on the Main Screen!
+    _ambientSeconds += dt;
+
+    if (_stage == RunStage.titleHover) {
+      return;
+    }
+
+    if (_stage == RunStage.introFlight) {
+      _introProgress += dt / GameConfig.introFlightDurationSeconds;
+      verticalMotion.update(dt);
+      _travelled += currentSpeed * dt;
+
+      if (_introProgress >= 1.0) {
+        _introProgress = 1.0;
+        _stage = RunStage.running;
+        if (player.isMounted) {
+          player.onIntroTouchdown();
+          final landingPos = Vector2(
+            player.position.x,
+            playerPlaneY + player.size.y * 0.28,
+          );
+          add(VfxBurst.jumpRipple(landingPos));
+          add(VfxBurst.orbCollect(landingPos));
+        }
+        hudTick.value += 1;
+      }
+      return;
+    }
+
+    // RunStage.running
     if (_stumbleTimer > 0) {
       _stumbleTimer = math.max(0.0, _stumbleTimer - dt);
     }
@@ -350,16 +446,27 @@ class SoulDuskRunGame extends FlameGame {
 
   // --------------------------------------------------------------- gameplay
 
+  /// Clicking START on the Main Screen launches Soul into the animated
+  /// sky-flight arc descending onto the stone bridge!
   void startRun() {
-    if (_runStarted || _ended || paused) {
+    if (_stage != RunStage.titleHover || _ended || paused) {
       return;
     }
-    _runStarted = true;
+    _stage = RunStage.introFlight;
+    _introProgress = 0.0;
+    if (player.isMounted && size.x > 0 && size.y > 0) {
+      final skyBurstPos = Vector2(
+        player.position.x,
+        playerPlaneY -
+            GameConfig.titleHoverElevation * size.y * GameConfig.jumpHeightRatio,
+      );
+      add(VfxBurst.shieldShatter(skyBurstPos));
+    }
     hudTick.value += 1;
   }
 
   void moveLane(int direction) {
-    if (_ended || paused || !_runStarted) {
+    if (_ended || paused || !_acceptsRunnerControls) {
       return;
     }
     if (direction < 0) {
@@ -370,7 +477,10 @@ class SoulDuskRunGame extends FlameGame {
   }
 
   void jump() {
-    if (_ended || paused || !_runStarted || powerUps.isSolarDashing) {
+    if (_ended ||
+        paused ||
+        !_acceptsRunnerControls ||
+        powerUps.isSolarDashing) {
       return;
     }
     if (verticalMotion.jump()) {
@@ -381,7 +491,7 @@ class SoulDuskRunGame extends FlameGame {
   }
 
   void triggerCloudBounce(Vector2 cloudCenter) {
-    if (_ended || paused || !_runStarted) {
+    if (_ended || paused || !isGroundRunning) {
       return;
     }
     verticalMotion.bounce();
@@ -390,14 +500,17 @@ class SoulDuskRunGame extends FlameGame {
   }
 
   void slide() {
-    if (_ended || paused || !_runStarted || powerUps.isSolarDashing) {
+    if (_ended ||
+        paused ||
+        !_acceptsRunnerControls ||
+        powerUps.isSolarDashing) {
       return;
     }
     verticalMotion.slide();
   }
 
   bool activateSolarShield() {
-    if (_ended || paused || !_runStarted) {
+    if (_ended || paused || !isGroundRunning) {
       return false;
     }
     final activated = powerUps.activateShield();
@@ -562,7 +675,7 @@ class SoulDuskRunGame extends FlameGame {
   // --------------------------------------------------------------- pause
 
   void pauseWithMenu() {
-    if (_ended || paused) {
+    if (_ended || paused || isTitleHovering) {
       return;
     }
     pauseEngine();
@@ -576,14 +689,16 @@ class SoulDuskRunGame extends FlameGame {
     }
   }
 
-  void pauseByLifecycle() => pauseWithMenu();
+  void pauseByLifecycle() {
+    if (isTitleHovering) {
+      return;
+    }
+    pauseWithMenu();
+  }
 
   // --------------------------------------------------------------- replay
 
-  void resetRun() {
-    _runNumber += 1;
-    _generator = SeededObstacleGenerator(seed: _seed + _runNumber);
-
+  void _clearWorldEntities() {
     for (final c in children.whereType<Obstacle>().toList()) {
       c.removeFromParent();
     }
@@ -611,7 +726,35 @@ class SoulDuskRunGame extends FlameGame {
     _cameraLane = GameConfig.initialLane.toDouble();
     _stumbleTimer = 0;
     _ended = false;
-    _runStarted = false;
+  }
+
+  /// PLAY AGAIN: resets and immediately launches Soul's sky-flight swoop onto
+  /// the stone bridge!
+  void resetRun() {
+    _runNumber += 1;
+    _generator = SeededObstacleGenerator(seed: _seed + _runNumber);
+    _clearWorldEntities();
+
+    _stage = RunStage.introFlight;
+    _introProgress = 0.0;
+
+    overlays.remove(gameOverOverlayId);
+    overlays.remove(pauseOverlayId);
+    if (paused) {
+      resumeEngine();
+    }
+    hudTick.value += 1;
+  }
+
+  /// Returns cleanly to the Living 3D Main Screen (`RunStage.titleHover`) with
+  /// Soul hovering alive in the sky!
+  void returnToTitleHover() {
+    _runNumber += 1;
+    _generator = SeededObstacleGenerator(seed: _seed + _runNumber);
+    _clearWorldEntities();
+
+    _stage = RunStage.titleHover;
+    _introProgress = 0.0;
 
     overlays.remove(gameOverOverlayId);
     overlays.remove(pauseOverlayId);
