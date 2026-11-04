@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soul_dusk_run/game/input/lane_gesture_controller.dart';
 
 void main() {
-  group('LaneGestureController (S13 instant pointer swipes & taps)', () {
+  group('LaneGestureController (S14 swipes, center dead-zone & double-tap)', () {
     test('fires 4-way swipes immediately on pointer move before finger lift',
         () {
       final events = <String>[];
@@ -45,12 +45,39 @@ void main() {
         isRunStarted: () => true,
       );
 
-      // 16px upward flick (> tapMaxSlop 10, < swipeDistanceThreshold 22)
-      ctrl.onPointerDown(1, 80, 400); // on left half of screen!
-      ctrl.onPointerMove(1, 80, 384);
-      ctrl.onPointerUp(1, 80, 384, 360);
+      // 15px upward flick (> tapMaxSlop 10, < swipeDistanceThreshold 20)
+      ctrl.onPointerDown(1, 80, 400);
+      ctrl.onPointerMove(1, 80, 385);
+      ctrl.onPointerUp(1, 80, 385, 360);
       expect(events, isEmpty,
           reason: 'must never accidentally move left when trying to flick up');
+    });
+
+    test('center tap dead-zone prevents accidental lane jumps and triggers '
+        'double-tap shield while outer zones move lanes cleanly', () {
+      final events = <String>[];
+      final ctrl = LaneGestureController(
+        onMove: (d) => events.add(d < 0 ? 'left' : 'right'),
+        onDoubleTap: () => events.add('shield'),
+        isRunStarted: () => true,
+      );
+
+      // Single center tap (x = 180 / 360 = 0.50) -> no accidental lane move!
+      ctrl.onPointerDown(1, 180, 400);
+      ctrl.onPointerUp(1, 180, 400, 360, timestampMs: 1000);
+      expect(events, isEmpty);
+
+      // Second quick center tap -> triggers Solar Shield!
+      ctrl.onPointerDown(2, 182, 400);
+      ctrl.onPointerUp(2, 182, 400, 360, timestampMs: 1200);
+      expect(events, ['shield']);
+
+      // Outer left (120 / 360 = 0.333) & outer right (260 / 360 = 0.722) move!
+      ctrl.onPointerDown(3, 120, 400);
+      ctrl.onPointerUp(3, 120, 400, 360, timestampMs: 2000);
+      ctrl.onPointerDown(4, 260, 400);
+      ctrl.onPointerUp(4, 260, 400, 360, timestampMs: 2500);
+      expect(events, ['shield', 'left', 'right']);
     });
 
     test('chains orthogonal L-swipe (lane switch -> slide) in one stroke', () {

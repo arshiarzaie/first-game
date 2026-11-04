@@ -7,10 +7,11 @@ import '../../game/soul_dusk_run_game.dart';
 import '../overlays/game_over_overlay.dart';
 import '../overlays/pause_overlay.dart';
 
-/// Hosts the Flame game, instant zero-lag 4-way Subway-tier pointer routing
-/// (swipe left/right, swipe up to jump, swipe down to slide/fast-fall,
-/// chainable L-swipes, and crisp stationary tap-halves), HUD badges, active
-/// power-up timers, and the Solar Aegis shield button (S13).
+/// Hosts the Flame game, instant zero-lag 4-way Subway-Surfers pointer routing
+/// (swipe left/right, swipe up to jump, swipe down to roll/fast-fall,
+/// chainable L-swipes, center double-tap Hoverboard), sunlit crisp HUD pills,
+/// and active power-up timers (S15: Jetpack, Super Sneakers, Magnet, 2x,
+/// and Solar Hoverboard).
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, this.world = GameWorld.duskHollow});
 
@@ -32,6 +33,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       onMove: _game.moveLane,
       onJump: _game.jump,
       onSlide: _game.slide,
+      onDoubleTap: _game.activateSolarShield,
       isRunStarted: () => _game.isRunStarted,
       onStartRun: _game.startRun,
     );
@@ -66,9 +68,6 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
           return Stack(
             fit: StackFit.expand,
             children: [
-              // Instant pointer listener wraps GameWidget underneath HUD
-              // controls so Pause / Solar Shield buttons absorb their own taps
-              // while gameplay swipes fire with 0ms finger-lift delay.
               Listener(
                 behavior: HitTestBehavior.opaque,
                 onPointerDown: (event) {
@@ -101,6 +100,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                     event.localPosition.dx,
                     event.localPosition.dy,
                     screenWidth,
+                    timestampMs: event.timeStamp.inMilliseconds,
                   );
                 },
                 onPointerCancel: (event) {
@@ -109,7 +109,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                 child: GameWidget<SoulDuskRunGame>(
                   game: _game,
                   errorBuilder: (context, error) => Material(
-                    color: const Color(0xFF140D26),
+                    color: const Color(0xFF1C2C44),
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
@@ -117,7 +117,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                           'The scene failed to load.\n$error',
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            color: Color(0xFFF6E7C8),
+                            color: Color(0xFFFFF6E5),
                             fontSize: 16,
                           ),
                         ),
@@ -136,7 +136,6 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                 ),
               ),
 
-              // Top HUD pills + pre-start prompt + Solar Aegis shield CTA.
               ValueListenableBuilder<int>(
                 valueListenable: _game.hudTick,
                 builder: (context, _, _) {
@@ -154,15 +153,15 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                       if (!_game.isRunStarted && !_game.isEnded)
                         const IgnorePointer(
                           child: Align(
-                            alignment: Alignment(0, 0.16),
+                            alignment: Alignment(0, 0.14),
                             child: _StartPromptBanner(),
                           ),
                         ),
                       if (_game.isRunStarted && !_game.isEnded)
                         Positioned(
                           right: 16,
-                          bottom: bottomPad + 22,
-                          child: _SolarShieldButton(game: _game),
+                          bottom: bottomPad + 20,
+                          child: _HoverboardButton(game: _game),
                         ),
                     ],
                   );
@@ -172,13 +171,19 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
               Positioned(
                 top: topPad + 8,
                 right: 8,
-                child: IconButton(
-                  tooltip: 'Pause',
-                  onPressed: _game.pauseWithMenu,
-                  icon: const Icon(
-                    Icons.pause_rounded,
-                    color: Color(0xFFF6E7C8),
-                    size: 30,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xAA1C2C44),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: IconButton(
+                    tooltip: 'Pause',
+                    onPressed: _game.pauseWithMenu,
+                    icon: const Icon(
+                      Icons.pause_rounded,
+                      color: Color(0xFFFFF8EB),
+                      size: 28,
+                    ),
                   ),
                 ),
               ),
@@ -207,14 +212,14 @@ class _TopHudBar extends StatelessWidget {
           runSpacing: 6,
           children: [
             _HudPill(
-              borderColor: const Color(0x669E6BFF),
+              borderColor: const Color(0xCCFFFFFF),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     '${game.score.totalScore}'.padLeft(5, '0'),
                     style: const TextStyle(
-                      color: Color(0xFFFFF6E5),
+                      color: Color(0xFFFFF8EB),
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.1,
@@ -228,13 +233,13 @@ class _TopHudBar extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFB300),
+                        color: const Color(0xFFFFB82E),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
                         '2x',
                         style: TextStyle(
-                          color: Color(0xFF1A0F2E),
+                          color: Color(0xFF1C2C44),
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                         ),
@@ -245,20 +250,20 @@ class _TopHudBar extends StatelessWidget {
               ),
             ),
             _HudPill(
-              borderColor: const Color(0x77FFD166),
+              borderColor: const Color(0xDDFFD65C),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(
                     Icons.wb_sunny_rounded,
                     size: 17,
-                    color: Color(0xFFFFD166),
+                    color: Color(0xFFFFD65C),
                   ),
                   const SizedBox(width: 5),
                   Text(
                     '${game.score.orbsCollected}',
                     style: const TextStyle(
-                      color: Color(0xFFFFE599),
+                      color: Color(0xFFFFECA6),
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                     ),
@@ -275,24 +280,31 @@ class _TopHudBar extends StatelessWidget {
           children: [
             if (p.isSolarDashing)
               _ActiveTimerBadge(
-                label: 'SKY-DASH',
+                label: 'JETPACK',
                 remaining: p.dashRemaining,
                 total: p.solarDashDuration,
-                color: const Color(0xFFFF8F00),
+                color: const Color(0xFFFF7A38),
+              ),
+            if (p.hasSuperSneakers)
+              _ActiveTimerBadge(
+                label: 'SNEAKERS',
+                remaining: p.sneakersRemaining,
+                total: p.superSneakersDuration,
+                color: const Color(0xFF42D678),
               ),
             if (p.hasMagnet)
               _ActiveTimerBadge(
                 label: 'MAGNET',
                 remaining: p.magnetRemaining,
                 total: p.magnetDuration,
-                color: const Color(0xFF4DD8FF),
+                color: const Color(0xFF48B8F0),
               ),
             if (p.hasMultiplier)
               _ActiveTimerBadge(
-                label: '2x SURGE',
+                label: '2x SCORE',
                 remaining: p.multiplierRemaining,
                 total: p.multiplierDuration,
-                color: const Color(0xFFFFCA28),
+                color: const Color(0xFFFFCA42),
               ),
           ],
         ),
@@ -312,13 +324,13 @@ class _HudPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xB8160D29),
+        color: const Color(0xD41C2C44),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: borderColor, width: 1.2),
+        border: Border.all(color: borderColor, width: 1.4),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x55000000),
-            blurRadius: 8,
+            color: Color(0x38000000),
+            blurRadius: 6,
             offset: Offset(0, 2),
           ),
         ],
@@ -345,12 +357,12 @@ class _ActiveTimerBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final ratio = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
     return Container(
-      width: 98,
+      width: 100,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xCC180F2E),
+        color: const Color(0xD81C2C44),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.75), width: 1),
+        border: Border.all(color: color, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,13 +401,13 @@ class _StartPromptBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xCC180E2C),
+        color: const Color(0xDD1C2C44),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0x99FFD166), width: 1.4),
+        border: Border.all(color: const Color(0xFFFFD65C), width: 1.8),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x66000000),
-            blurRadius: 14,
+            color: Color(0x44000000),
+            blurRadius: 12,
             offset: Offset(0, 4),
           ),
         ],
@@ -406,7 +418,7 @@ class _StartPromptBanner extends StatelessWidget {
           Text(
             'TAP TO RUN',
             style: TextStyle(
-              color: Color(0xFFFFE599),
+              color: Color(0xFFFFEEAA),
               fontSize: 19,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.8,
@@ -414,12 +426,12 @@ class _StartPromptBanner extends StatelessWidget {
           ),
           SizedBox(height: 4),
           Text(
-            '◀ ▶ LANE   •   ▲ JUMP   •   ▼ SLIDE',
+            '◀ ▶ LANE   •   ▲ JUMP   •   ▼ ROLL   •   2× BOARD',
             style: TextStyle(
-              color: Color(0xCCCAE9FF),
-              fontSize: 11.5,
+              color: Color(0xFFE6F4FF),
+              fontSize: 11,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
+              letterSpacing: 0.6,
             ),
           ),
         ],
@@ -428,8 +440,8 @@ class _StartPromptBanner extends StatelessWidget {
   }
 }
 
-class _SolarShieldButton extends StatelessWidget {
-  const _SolarShieldButton({required this.game});
+class _HoverboardButton extends StatelessWidget {
+  const _HoverboardButton({required this.game});
 
   final SoulDuskRunGame game;
 
@@ -439,15 +451,15 @@ class _SolarShieldButton extends StatelessWidget {
     final active = p.hasShield;
     final ready = p.canActivateShield;
     final label = active
-        ? 'AEGIS ${p.shieldRemaining.ceil()}s'
+        ? 'BOARD ${p.shieldRemaining.ceil()}s'
         : ready
-            ? 'SOLAR SHIELD'
+            ? 'HOVERBOARD'
             : '${p.shieldCooldownRemaining.ceil()}s';
     final accent = active
-        ? const Color(0xFF4DD8FF)
+        ? const Color(0xFF48D4F4)
         : ready
-            ? const Color(0xFFFFD166)
-            : const Color(0x669E92B8);
+            ? const Color(0xFFFFD65C)
+            : const Color(0x88B0BCCB);
 
     return Material(
       color: Colors.transparent,
@@ -457,27 +469,22 @@ class _SolarShieldButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: active
-                ? const Color(0xDD1A2A44)
-                : ready
-                    ? const Color(0xDD28183E)
-                    : const Color(0x99160E26),
+            color: const Color(0xDD1C2C44),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: accent, width: 1.5),
-            boxShadow: ready || active
-                ? [
-                    BoxShadow(
-                      color: accent.withValues(alpha: 0.35),
-                      blurRadius: 12,
-                    ),
-                  ]
-                : const [],
+            border: Border.all(color: accent, width: 1.6),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x38000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.shield_rounded,
+                Icons.surfing_rounded,
                 size: 18,
                 color: accent,
               ),
@@ -486,8 +493,8 @@ class _SolarShieldButton extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: ready || active
-                      ? const Color(0xFFFFF6E5)
-                      : const Color(0x99C7BFE0),
+                      ? const Color(0xFFFFF8EB)
+                      : const Color(0xAAB8C6D8),
                   fontSize: 12.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.7,

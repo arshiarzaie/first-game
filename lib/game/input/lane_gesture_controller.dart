@@ -1,9 +1,9 @@
 import 'dart:math' as math;
 
 /// Maps raw pointer motions & gestures to instant 4-way Subway-tier runner
-/// intents (S13: zero-lift-lag pointer swipe detection, chainable L-swipes,
-/// strict stationary-tap discrimination so short vertical flicks never
-/// misfire as sideways lane taps, and P4 first-input start gating).
+/// intents (S14: zero-lift-lag 4-way swipes, chainable L-swipes, center safe
+/// dead-zone so middle taps never accidentally jerk Soul sideways, Subway-style
+/// double-tap Solar Shield activation, and P4 first-input start gating).
 ///
 /// Pure Dart (no widget/Flame dependency) so it is 100% unit-testable.
 class LaneGestureController {
@@ -11,21 +11,25 @@ class LaneGestureController {
     required void Function(int direction) onMove,
     void Function()? onJump,
     void Function()? onSlide,
+    void Function()? onDoubleTap,
     bool Function()? isRunStarted,
     void Function()? onStartRun,
     this.swipeVelocityThreshold = 200,
-    this.swipeDistanceThreshold = 22.0,
-    this.chainSwipeDistanceThreshold = 34.0,
+    this.swipeDistanceThreshold = 20.0,
+    this.chainSwipeDistanceThreshold = 32.0,
     this.tapMaxSlop = 10.0,
+    this.centerDeadZoneHalfFraction = 0.10,
   })  : _onMove = onMove,
         _onJump = onJump,
         _onSlide = onSlide,
+        _onDoubleTap = onDoubleTap,
         _isRunStarted = isRunStarted,
         _onStartRun = onStartRun;
 
   final void Function(int direction) _onMove;
   final void Function()? _onJump;
   final void Function()? _onSlide;
+  final void Function()? _onDoubleTap;
   final bool Function()? _isRunStarted;
   final void Function()? _onStartRun;
 
@@ -41,9 +45,14 @@ class LaneGestureController {
   final double chainSwipeDistanceThreshold;
 
   /// Maximum pointer excursion (logical px) that still counts as a stationary
-  /// left/right tap on finger release. Anything between [tapMaxSlop] and
-  /// [swipeDistanceThreshold] is ignored rather than misfiring as a lane tap.
+  /// tap on finger release.
   final double tapMaxSlop;
+
+  /// Half-width around screen center (`[0.40w .. 0.60w]` by default) where
+  /// stationary taps DO NOT accidentally trigger left/right lane jumps
+  /// (outer `[0 .. 0.40w)` and `(0.60w .. w]` still support edge tap-to-step,
+  /// while double-tapping center activates Solar Shield!).
+  final double centerDeadZoneHalfFraction;
 
   int? _activePointer;
   double _originX = 0;
@@ -54,6 +63,7 @@ class LaneGestureController {
   bool _swipedInStroke = false;
   bool _consumedForStart = false;
   int _lastAxis = 0; // 1 = horizontal, 2 = vertical
+  int? _lastCenterTapMs;
 
   // --------------------------------------------------- Instant pointer API
 
@@ -108,8 +118,6 @@ class LaneGestureController {
     }
 
     final axis = absX >= absY ? 1 : 2;
-    // Prevent firing duplicate swipes along the same axis during a single
-    // long follow-through stroke, while allowing crisp orthogonal L-chains!
     if (_swipedInStroke && axis == _lastAxis) {
       _anchorX = x;
       _anchorY = y;
@@ -132,7 +140,13 @@ class LaneGestureController {
     }
   }
 
-  void onPointerUp(int pointer, double x, double y, double width) {
+  void onPointerUp(
+    int pointer,
+    double x,
+    double y,
+    double width, {
+    int? timestampMs,
+  }) {
     if (pointer != _activePointer) {
       return;
     }
@@ -151,7 +165,7 @@ class LaneGestureController {
         _onStartRun?.call();
         return;
       }
-      onTapUp(x, width);
+      onTapUp(x, width, timestampMs: timestampMs);
     }
   }
 
@@ -181,10 +195,28 @@ class LaneGestureController {
     }
   }
 
-  void onTapUp(double localX, double width) {
+  void onTapUp(double localX, double width, {int? timestampMs}) {
     if (width <= 0) {
       return;
     }
-    _onMove(localX < width / 2 ? -1 : 1);
+    final frac = localX / width;
+    final low = 0.5 - centerDeadZoneHalfFraction;
+    final high = 0.5 + centerDeadZoneHalfFraction;
+
+    if (frac >= low && frac <= high) {
+      // Safe center zone: never misfires a sideways lane jump; double-tap
+      // triggers Solar Shield (Subway Surfers Hoverboard gesture!).
+      final nowMs = timestampMs ?? DateTime.now().millisecondsSinceEpoch;
+      if (_lastCenterTapMs != null && (nowMs - _lastCenterTapMs!) <= 320) {
+        _lastCenterTapMs = null;
+        _onDoubleTap?.call();
+      } else {
+        _lastCenterTapMs = nowMs;
+      }
+      return;
+    }
+
+    _lastCenterTapMs = null;
+    _onMove(frac < 0.5 ? -1 : 1);
   }
 }

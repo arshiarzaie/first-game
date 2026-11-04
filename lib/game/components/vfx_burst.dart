@@ -3,8 +3,9 @@ import 'dart:ui';
 
 import 'package:flame/components.dart';
 
-/// Lightweight additive Canvas particle/ring burst for orb pickups,
-/// jump takeoffs, and Solar Aegis obstacle shatters (S12).
+/// Eye-friendly crisp Canvas particle/ring burst for orb pickups,
+/// jump takeoffs, and Solar Aegis obstacle shatters (S14: priority 2400 above
+/// 1000-step 3D corridor depth sort, soft non-flashing alpha).
 class VfxBurst extends PositionComponent {
   VfxBurst._({
     required Vector2 origin,
@@ -14,34 +15,34 @@ class VfxBurst extends PositionComponent {
     required this.coreColor,
     required this.ringColor,
     this.flattenY = 1.0,
-  }) : super(position: origin, anchor: Anchor.center, priority: 60);
+  }) : super(position: origin, anchor: Anchor.center, priority: 2400);
 
   factory VfxBurst.orbCollect(Vector2 center) => VfxBurst._(
         origin: center,
-        duration: 0.26,
-        maxRadius: 46,
-        sparkCount: 6,
-        coreColor: const Color(0xFFFFE082),
-        ringColor: const Color(0xFFFFB300),
+        duration: 0.22,
+        maxRadius: 34,
+        sparkCount: 5,
+        coreColor: const Color(0xFFFFE599),
+        ringColor: const Color(0xFFF5B041),
       );
 
   factory VfxBurst.shieldShatter(Vector2 center) => VfxBurst._(
         origin: center,
-        duration: 0.42,
-        maxRadius: 118,
-        sparkCount: 12,
-        coreColor: const Color(0xFFFFE57F),
-        ringColor: const Color(0xFF4DD8FF),
+        duration: 0.34,
+        maxRadius: 82,
+        sparkCount: 8,
+        coreColor: const Color(0xFFFFE8B3),
+        ringColor: const Color(0xFF64D8EE),
       );
 
   factory VfxBurst.jumpRipple(Vector2 footCenter) => VfxBurst._(
         origin: footCenter,
-        duration: 0.25,
-        maxRadius: 56,
+        duration: 0.22,
+        maxRadius: 44,
         sparkCount: 0,
-        coreColor: const Color(0xAAFFD54F),
-        ringColor: const Color(0xAA4DD8FF),
-        flattenY: 0.34,
+        coreColor: const Color(0x88FFE599),
+        ringColor: const Color(0x8892E4DA),
+        flattenY: 0.32,
       );
 
   final double duration;
@@ -65,36 +66,33 @@ class VfxBurst extends PositionComponent {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
-    final t = (_elapsed / duration).clamp(0.0, 1.0);
+    final t = (_elapsed / duration).clamp(0.0, 1.0).toDouble();
     final ease = 1 - (1 - t) * (1 - t);
-    final fade = (1 - t).clamp(0.0, 1.0);
-    final radius = maxRadius * (0.22 + 0.78 * ease);
+    final fade = (1 - t).clamp(0.0, 1.0).toDouble();
+    final radius = maxRadius * (0.24 + 0.76 * ease);
 
     canvas.save();
     canvas.scale(1.0, flattenY);
 
     final ringPaint = Paint()
-      ..color = ringColor.withValues(alpha: fade * 0.85)
+      ..color = ringColor.withValues(alpha: fade * 0.65)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = (4.5 * fade).clamp(1.0, 5.0)
-      ..blendMode = BlendMode.plus;
+      ..strokeWidth = (3.2 * fade).clamp(1.0, 4.0).toDouble();
     canvas.drawCircle(Offset.zero, radius, ringPaint);
 
     final glowPaint = Paint()
-      ..color = coreColor.withValues(alpha: fade * 0.45)
-      ..blendMode = BlendMode.plus;
-    canvas.drawCircle(Offset.zero, radius * 0.55, glowPaint);
+      ..color = coreColor.withValues(alpha: fade * 0.28);
+    canvas.drawCircle(Offset.zero, radius * 0.48, glowPaint);
 
     if (sparkCount > 0) {
       final sparkPaint = Paint()
-        ..color = coreColor.withValues(alpha: fade * 0.95)
-        ..strokeWidth = 2.6
-        ..strokeCap = StrokeCap.round
-        ..blendMode = BlendMode.plus;
+        ..color = coreColor.withValues(alpha: fade * 0.80)
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round;
       for (var i = 0; i < sparkCount; i++) {
         final angle = (i / sparkCount) * math.pi * 2 + 0.3;
-        final r0 = radius * 0.45;
-        final r1 = radius * 1.15;
+        final r0 = radius * 0.48;
+        final r1 = radius * 1.08;
         canvas.drawLine(
           Offset(math.cos(angle) * r0, math.sin(angle) * r0),
           Offset(math.cos(angle) * r1, math.sin(angle) * r1),

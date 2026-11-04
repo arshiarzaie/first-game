@@ -7,19 +7,21 @@ import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 import '../systems/power_up_system.dart';
 
-/// Collectible on-track Subway-style power-up emblem (S13: horizon-queued with
-/// smooth `1 / Z` projection).
+/// Collectible on-track Subway-Surfers power-up badge (S15: Magnet, 2x Surge,
+/// Jetpack Sky-Dash, and Super Sneakers).
 class PowerUpPickup extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   PowerUpPickup({
     required this.lane,
     required this.kind,
     double initialDepth = 1.0,
+    this.elevation = 0.0,
   })  : _depth = initialDepth,
-        super(priority: 12);
+        super(priority: 1000);
 
   final int lane;
   final PowerUpKind kind;
+  final double elevation;
   double _depth;
   double _phase = 0;
   bool _collected = false;
@@ -41,7 +43,8 @@ class PowerUpPickup extends PositionComponent
 
     if (!_collected && _depth <= 0.075 && _depth >= -0.055) {
       final laneDiff = (game.player.currentLane - lane).abs();
-      if (laneDiff < 0.56) {
+      final elevDiff = (elevation - game.effectivePlayerElevation).abs();
+      if (laneDiff < 0.56 && elevDiff < 0.72) {
         _collected = true;
         game.onPowerUpCollected(kind, position.clone());
         removeFromParent();
@@ -62,23 +65,26 @@ class PowerUpPickup extends PositionComponent
       return;
     }
     final sc = game.scaleForDepth(_depth);
-    final bob = math.sin(_phase) * size.y * 0.06 * sc;
+    final bob = math.sin(_phase) * size.y * 0.05 * sc;
+    final lift = elevation * game.size.y * GameConfig.jumpHeightRatio * sc;
     position = Vector2(
       game.laneXForDepth(lane.toDouble(), _depth),
-      game.yForDepth(_depth) - size.y * 0.34 * sc + bob,
+      game.yForDepth(_depth) - size.y * 0.36 * sc - lift + bob,
     );
     scale = Vector2.all(sc);
-    priority = (6 + (1.0 - _depth).clamp(0.0, 1.0) * 16).round();
+    priority = ((2.0 - _depth) * 1000).round();
   }
 
   Color get _accentColor {
     switch (kind) {
       case PowerUpKind.magnet:
-        return const Color(0xFF4DD8FF);
+        return const Color(0xFF2898D8);
       case PowerUpKind.multiplier2x:
-        return const Color(0xFFFFB300);
+        return const Color(0xFFF5A623);
       case PowerUpKind.solarDash:
-        return const Color(0xFFFF6D00);
+        return const Color(0xFFE8563A);
+      case PowerUpKind.superSneakers:
+        return const Color(0xFF34B864);
     }
   }
 
@@ -90,6 +96,8 @@ class PowerUpPickup extends PositionComponent
         return '2x';
       case PowerUpKind.solarDash:
         return '★';
+      case PowerUpKind.superSneakers:
+        return '▲';
     }
   }
 
@@ -101,16 +109,14 @@ class PowerUpPickup extends PositionComponent
     }
     final w = size.x;
     final c = Offset(w / 2, w / 2);
-    final pulse = 1 + math.sin(_phase * 1.3) * 0.08;
+    final pulse = 1 + math.sin(_phase * 1.3) * 0.06;
     final accent = _accentColor;
-    final horizonAlpha = ((1.02 - _depth) / 0.10).clamp(0.0, 1.0);
+    final horizonAlpha = ((1.02 - _depth) / 0.10).clamp(0.0, 1.0).toDouble();
 
     canvas.drawCircle(
       c,
-      w * 0.50 * pulse,
-      Paint()
-        ..color = accent.withValues(alpha: 0.32 * horizonAlpha)
-        ..blendMode = BlendMode.plus,
+      w * 0.44 * pulse,
+      Paint()..color = accent.withValues(alpha: 0.25 * horizonAlpha),
     );
 
     final r = w * 0.35 * pulse;
@@ -123,21 +129,21 @@ class PowerUpPickup extends PositionComponent
     canvas.drawPath(
       diamond,
       Paint()
-        ..color = const Color(0xEE1A1030).withValues(alpha: 0.92 * horizonAlpha),
+        ..color = const Color(0xF01C2C44).withValues(alpha: 0.94 * horizonAlpha),
     );
     canvas.drawPath(
       diamond,
       Paint()
         ..color = accent.withValues(alpha: horizonAlpha)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = w * 0.055,
+        ..strokeWidth = w * 0.06,
     );
 
     final tp = TextPainter(
       text: TextSpan(
         text: _glyph,
         style: TextStyle(
-          color: const Color(0xFFFFF3D1).withValues(alpha: horizonAlpha),
+          color: const Color(0xFFFFF8E8).withValues(alpha: horizonAlpha),
           fontSize: w * 0.29,
           fontWeight: FontWeight.w900,
         ),

@@ -45,6 +45,15 @@ void main() {
       }
     });
 
+    test('bounceFromBlockedLane returns Soul safely to previousLane on stumble',
+        () {
+      final lanes = LaneSystem(); // starts in lane 1
+      lanes.moveRight(); // moves 1 -> 2, previousLane = 1
+      expect(lanes.lane, 2);
+      lanes.bounceFromBlockedLane(2);
+      expect(lanes.lane, 1);
+    });
+
     test('reset returns to the initial lane', () {
       final lanes = LaneSystem()..moveLeft();
       expect(lanes.lane, 0);

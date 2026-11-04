@@ -6,17 +6,29 @@ import 'package:flame/components.dart';
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
-/// The Soul — golden humanoid sun hero (S13: locked circular 3D sun-head
-/// silhouette across all 8 symmetrical run frames, dedicated 3D `jump.png`
-/// sky-vault & `slide.png` parkour tuck poses, crisp grounded shadow,
-/// Solar Aegis barrier ring, and Sunburst Sky-Dash comet tail).
+/// The Soul — crisp sunlit golden humanoid sun runner (S15 Subway-Surfers
+/// Grade).
+///
+/// Features:
+///  * Crisp warm-umber cartoon silhouette outline across all 8 athletic run
+///    frames, sky-vault jump, and parkour roll poses;
+///  * Real 3D Hoverboard (`hasShield`) rendered directly beneath Soul's feet
+///    with banked surfing tilt;
+///  * Glowing green-gold Super Sneakers aura around Soul's feet when active;
+///  * Smooth cubic ease-out lane carve + athletic step-hop arc + touchdown
+///    cushion on both ground rails AND 3D train roofs!
 class SoulPlayer extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
-  SoulPlayer() : super(priority: 20);
+  SoulPlayer() : super(priority: 2000);
 
   double _laneX = GameConfig.initialLane.toDouble();
+  double _hopStartLane = GameConfig.initialLane.toDouble();
+  int _hopTargetLane = GameConfig.initialLane;
+  double _hopProgress = 1.0;
   double _elapsed = 0;
   double _lean = 0;
+  bool _wasJumping = false;
+  double _landingTimer = 0;
 
   double get currentLane => _laneX;
 
@@ -27,6 +39,8 @@ class SoulPlayer extends PositionComponent
     final width = game.size.x * GameConfig.playerWidthRatio;
     size = Vector2(width, width);
     _laneX = game.laneSystem.lane.toDouble();
+    _hopStartLane = _laneX;
+    _hopTargetLane = game.laneSystem.lane;
     position = Vector2(game.laneXOnPlayerPlane(_laneX), game.playerPlaneY);
   }
 
@@ -34,19 +48,47 @@ class SoulPlayer extends PositionComponent
   void update(double dt) {
     super.update(dt);
     _elapsed += dt;
-    final target = game.laneSystem.lane.toDouble();
-    if (target != _laneX) {
-      final maxDelta = dt / GameConfig.laneSwitchSeconds;
-      final delta = (target - _laneX).clamp(-maxDelta, maxDelta).toDouble();
-      _laneX += delta;
+
+    final targetInt = game.laneSystem.lane;
+    if (targetInt != _hopTargetLane) {
+      _hopStartLane = _laneX;
+      _hopTargetLane = targetInt;
+      _hopProgress = 0.0;
     }
-    _lean = (target - _laneX).clamp(-1.0, 1.0).toDouble();
+
+    if (_hopProgress < 1.0) {
+      _hopProgress = (_hopProgress + dt / GameConfig.laneSwitchSeconds)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      final u = 1.0 - math.pow(1.0 - _hopProgress, 3).toDouble();
+      _laneX = _hopStartLane + (_hopTargetLane - _hopStartLane) * u;
+    } else {
+      _laneX = _hopTargetLane.toDouble();
+    }
+
+    final remaining = _hopTargetLane - _laneX;
+    _lean = (remaining * 1.35).clamp(-1.0, 1.0).toDouble();
+
+    final jumpingNow = game.verticalMotion.isJumping;
+    if (_wasJumping && !jumpingNow && game.isRunStarted) {
+      _landingTimer = 0.11;
+    }
+    _wasJumping = jumpingNow;
+    if (_landingTimer > 0) {
+      _landingTimer = math.max(0.0, _landingTimer - dt);
+    }
+
     position = Vector2(game.laneXOnPlayerPlane(_laneX), game.playerPlaneY);
   }
 
   void reset() {
     _laneX = game.laneSystem.lane.toDouble();
+    _hopStartLane = _laneX;
+    _hopTargetLane = game.laneSystem.lane;
+    _hopProgress = 1.0;
     _lean = 0;
+    _wasJumping = false;
+    _landingTimer = 0;
     position = Vector2(game.laneXOnPlayerPlane(_laneX), game.playerPlaneY);
   }
 
@@ -71,12 +113,17 @@ class SoulPlayer extends PositionComponent
       final int index;
       if (!game.isRunStarted) {
         index = GameConfig.runIdleFrame;
-      } else if (jumping) {
-        index = 0;
+      } else if (jumping || game.powerUps.hasShield) {
+        // Surfing on Hoverboard holds an athletic poised stance with gentle carve!
+        index = game.powerUps.hasShield ? 1 : 0;
       } else if (sliding) {
         index = 4 % frames.length;
       } else {
-        index = (_elapsed * GameConfig.runCycleFps).floor() % frames.length;
+        final speedRatio = (game.currentSpeed / GameConfig.startSpeed)
+            .clamp(1.0, 1.38)
+            .toDouble();
+        index = (_elapsed * GameConfig.runCycleFps * speedRatio).floor() %
+            frames.length;
       }
       _renderFrame(canvas, frames[index], isDedicatedPose: false);
       return;
@@ -106,84 +153,114 @@ class SoulPlayer extends PositionComponent
     final dw = imgW * fit;
     final dh = imgH * fit;
 
-    final elev = game.effectivePlayerElevation;
-    final jumpLiftPx = elev * game.size.y * GameConfig.jumpHeightRatio;
+    final supportElev = game.baseSupportElevation;
+    final totalElev = game.effectivePlayerElevation;
+    final airAboveSupport = math.max(0.0, totalElev - supportElev);
+
+    final supportLiftPx = supportElev * game.size.y * GameConfig.jumpHeightRatio;
+    final totalLiftPx = totalElev * game.size.y * GameConfig.jumpHeightRatio;
     final sliding =
         game.verticalMotion.isSliding && !game.powerUps.isSolarDashing;
 
-    // In our 640x640 S13 sprites, Soul's planted feet sit at y ≈ 546/640
-    // (+0.353 * dh below sprite center). Shift sprite upward so feet rest
-    // cleanly right at SoulPlayer's center (`playerPlaneY`)!
-    final footAnchorShift = dh * 0.35;
-    final footFloorY = h / 2;
+    final hopLiftPx = (!sliding && airAboveSupport <= 0.02 && _hopProgress < 1.0)
+        ? math.sin(_hopProgress * math.pi) * game.size.y * 0.015
+        : 0.0;
 
-    // 1. Soft feathered ground shadow + warm solar floor reflection.
-    final shadowScale = (1.0 - elev * 0.48).clamp(0.42, 1.0);
+    final landingDipPx = _landingTimer > 0
+        ? math.sin((_landingTimer / 0.11) * math.pi) * dh * 0.032
+        : 0.0;
+
+    final footAnchorShift = dh * 0.37;
+    // Shadow sits right on the active support surface (track rails OR train roof!)
+    final supportFloorY = h / 2 - supportLiftPx;
+    final shadowScale =
+        (1.0 - airAboveSupport * 0.42).clamp(0.45, 1.0).toDouble();
+
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(w / 2, footFloorY),
-        width: dw * 0.56 * shadowScale,
-        height: dh * 0.13 * shadowScale,
+        center: Offset(w / 2, supportFloorY + 2),
+        width: dw * 0.46 * shadowScale,
+        height: dh * 0.085 * shadowScale,
       ),
-      Paint()
-        ..color = const Color(0x36FFB830)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
-    );
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w / 2, footFloorY + 2),
-        width: dw * 0.36 * shadowScale,
-        height: dh * 0.08 * shadowScale,
-      ),
-      Paint()
-        ..color = const Color(0x960D051A)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      Paint()..color = const Color(0x78302A24),
     );
 
-    final slideDropPx = (sliding && !isDedicatedPose) ? dh * 0.12 : 0.0;
-    final bodyCenterY =
-        h / 2 - footAnchorShift - jumpLiftPx + slideDropPx + (sliding && isDedicatedPose ? dh * 0.06 : 0.0);
+    final hoverSurfBob = game.powerUps.hasShield
+        ? math.sin(_elapsed * 6.0) * 3.5 - 5.0
+        : 0.0;
 
-    // 2. Sunburst Sky-Dash comet tail when flying above the track.
-    if (game.powerUps.isSolarDashing) {
-      final tail = Path()
-        ..moveTo(w / 2 - dw * 0.22, bodyCenterY + dh * 0.14)
-        ..lineTo(w / 2 + dw * 0.22, bodyCenterY + dh * 0.14)
-        ..lineTo(w / 2, bodyCenterY + dh * 0.86)
+    final footY = h / 2 - totalLiftPx - hopLiftPx + hoverSurfBob;
+
+    // 1. Sleek 3D Teal-and-Gold Subway Hoverboard beneath Soul's feet!
+    if (game.powerUps.hasShield) {
+      canvas.save();
+      canvas.translate(w / 2, footY + 3);
+      canvas.rotate(_lean * 0.22);
+      final bw = dw * 0.42;
+      final bh = dh * 0.095;
+      final board = Path()
+        ..moveTo(-bw, 0)
+        ..lineTo(-bw * 0.38, -bh)
+        ..lineTo(bw * 0.38, -bh)
+        ..lineTo(bw, 0)
+        ..lineTo(bw * 0.52, bh)
+        ..lineTo(-bw * 0.52, bh)
         ..close();
+      canvas.drawPath(board, Paint()..color = const Color(0xFF26A4C4));
       canvas.drawPath(
-        tail,
+        board,
         Paint()
-          ..color = const Color(0x88FFB300)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
-          ..blendMode = BlendMode.plus,
+          ..color = const Color(0xFFFFD64E)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.6,
+      );
+      canvas.restore();
+    }
+
+    // 2. Super Sneakers emerald-gold foot rings when active!
+    if (game.powerUps.hasSuperSneakers && !game.powerUps.isSolarDashing) {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(w / 2, footY + 2),
+          width: dw * 0.48,
+          height: dh * 0.11,
+        ),
+        Paint()
+          ..color = const Color(0xCC34B864)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.6,
       );
     }
 
-    // 3. Slide friction sparks on the stone flagstones.
-    if (sliding) {
-      final sparkPaint = Paint()
-        ..color = const Color(0xDDFFE082)
-        ..strokeWidth = 2.4
-        ..strokeCap = StrokeCap.round
-        ..blendMode = BlendMode.plus;
-      for (var i = -1; i <= 1; i += 2) {
-        final sx = w / 2 + i * dw * 0.18;
-        final jitter = math.sin(_elapsed * 40 + i) * 5;
-        canvas.drawLine(
-          Offset(sx, footFloorY - 2),
-          Offset(sx + i * (13 + jitter.abs()), footFloorY + 7),
-          sparkPaint,
-        );
-      }
+    final slideDropPx = (sliding && !isDedicatedPose) ? dh * 0.12 : 0.0;
+    final bodyCenterY = footY -
+        footAnchorShift +
+        landingDipPx +
+        slideDropPx +
+        (sliding && isDedicatedPose ? dh * 0.05 : 0.0);
+
+    // 3. Jetpack golden-orange sky stream when flying high above trains!
+    if (game.powerUps.isSolarDashing) {
+      final tail = Path()
+        ..moveTo(w / 2 - dw * 0.18, bodyCenterY + dh * 0.16)
+        ..lineTo(w / 2 + dw * 0.18, bodyCenterY + dh * 0.16)
+        ..lineTo(w / 2, bodyCenterY + dh * 0.82)
+        ..close();
+      canvas.drawPath(
+        tail,
+        Paint()..color = const Color(0xAAFF9828),
+      );
     }
 
-    // 4. Crisp high-DPI character render (no rubber-band head squash!).
+    // 4. Crisp character render
     canvas.save();
     canvas.translate(w / 2, bodyCenterY);
     canvas.rotate(_lean * GameConfig.playerLeanAngle);
-    final sx = (sliding && !isDedicatedPose) ? 1.12 : 1.0;
-    final sy = (sliding && !isDedicatedPose) ? 0.72 : 1.0;
+    final landingSquash = _landingTimer > 0
+        ? math.sin((_landingTimer / 0.11) * math.pi) * 0.045
+        : 0.0;
+    final sx = ((sliding && !isDedicatedPose) ? 1.12 : 1.0) + landingSquash;
+    final sy = ((sliding && !isDedicatedPose) ? 0.72 : 1.0) - landingSquash;
     canvas.scale(sx, sy);
 
     canvas.drawImageRect(
@@ -194,46 +271,26 @@ class SoulPlayer extends PositionComponent
     );
     canvas.restore();
 
-    // 5. Solar Aegis crash-shield barrier ring + sun-magnet halo.
-    if (game.powerUps.hasShield) {
-      final pulse = 1 + math.sin(_elapsed * 7) * 0.04;
-      final shieldRadius = dw * 0.44 * pulse;
-      final center = Offset(w / 2, bodyCenterY + dh * 0.02);
+    // 5. Magnet / Stumble indicators
+    if (game.isStumbling) {
+      final pulse = 0.55 + 0.45 * math.sin(_elapsed * 14).abs();
       canvas.drawCircle(
-        center,
-        shieldRadius,
+        Offset(w / 2, bodyCenterY + dh * 0.04),
+        dw * 0.40,
         Paint()
-          ..color = const Color(0x26FFD54F)
-          ..blendMode = BlendMode.plus,
-      );
-      canvas.drawCircle(
-        center,
-        shieldRadius,
-        Paint()
-          ..color = const Color(0xCCFFE082)
+          ..color = const Color(0xFFE04840).withValues(alpha: 0.70 * pulse)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.8
-          ..blendMode = BlendMode.plus,
-      );
-      canvas.drawCircle(
-        center,
-        shieldRadius * 1.07,
-        Paint()
-          ..color = const Color(0x884DD8FF)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..blendMode = BlendMode.plus,
+          ..strokeWidth = 2.4,
       );
     } else if (game.powerUps.hasMagnet) {
-      final pulse = 1 + math.sin(_elapsed * 9) * 0.05;
+      final pulse = 1 + math.sin(_elapsed * 8) * 0.04;
       canvas.drawCircle(
         Offset(w / 2, bodyCenterY + dh * 0.02),
-        dw * 0.40 * pulse,
+        dw * 0.39 * pulse,
         Paint()
-          ..color = const Color(0x774DD8FF)
+          ..color = const Color(0x992898D8)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0
-          ..blendMode = BlendMode.plus,
+          ..strokeWidth = 2.2,
       );
     }
   }
@@ -272,7 +329,7 @@ class SoulPlayer extends PositionComponent
     final elev = game.effectivePlayerElevation;
     final jumpLiftPx = elev * game.size.y * GameConfig.jumpHeightRatio;
     final center = Offset(w / 2, h / 2 - jumpLiftPx);
-    final radius = w * 0.38;
+    final radius = w * 0.36;
 
     final rayPaint = Paint()..color = const Color(0xFFFF9F68);
     for (var i = 0; i < 10; i++) {

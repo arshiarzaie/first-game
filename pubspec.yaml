@@ -3,7 +3,7 @@ description: >-
   SOUL: DUSK RUN — a 2.5D-inspired offline endless runner built with Flutter
   and Flame. Phase 1: playable greybox prototype.
 publish_to: 'none'
-version: 0.13.0+13
+version: 0.15.0+15
 
 environment:
   # Floors match flame 1.38.2's own constraints (Dart >=3.11, Flutter >=3.41).

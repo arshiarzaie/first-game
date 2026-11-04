@@ -47,7 +47,7 @@ class EnergyOrb extends PositionComponent
     final magnetized =
         game.powerUps.hasMagnet || game.powerUps.isSolarDashing;
     if (magnetized && _depth <= 0.56 && _depth >= -0.06) {
-      final pull = (dt * 10.0).clamp(0.0, 1.0);
+      final pull = (dt * 10.0).clamp(0.0, 1.0).toDouble();
       _currentLane += (game.player.currentLane - _currentLane) * pull;
       _currentElevation +=
           (game.effectivePlayerElevation - _currentElevation) * pull;
@@ -87,7 +87,7 @@ class EnergyOrb extends PositionComponent
       groundY - size.y * 0.44 * sc - lift,
     );
     scale = Vector2.all(sc);
-    priority = (6 + (1.0 - _depth).clamp(0.0, 1.0) * 14).round();
+    priority = ((2.0 - _depth) * 1000).round();
   }
 
   @override
@@ -99,7 +99,7 @@ class EnergyOrb extends PositionComponent
     final w = size.x;
     final center = Offset(w / 2, w / 2);
     final pulse = 1 + math.sin(_pulsePhase) * 0.06;
-    final horizonAlpha = ((1.02 - _depth) / 0.10).clamp(0.0, 1.0);
+    final horizonAlpha = ((1.02 - _depth) / 0.10).clamp(0.0, 1.0).toDouble();
 
     if (_currentElevation > 0.08) {
       final dropPx = _currentElevation * game.size.y * GameConfig.jumpHeightRatio;
@@ -119,11 +119,10 @@ class EnergyOrb extends PositionComponent
     if (sprite != null) {
       canvas.drawCircle(
         center,
-        w * 0.46 * pulse,
+        w * 0.45 * pulse,
         Paint()
           ..color =
-              const Color(0x42FFD166).withValues(alpha: 0.26 * horizonAlpha)
-          ..blendMode = BlendMode.plus,
+              const Color(0x36FFD166).withValues(alpha: 0.22 * horizonAlpha),
       );
       final fit = (w / sprite.width < w / sprite.height)
           ? w / sprite.width
