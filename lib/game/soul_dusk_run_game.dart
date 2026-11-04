@@ -21,8 +21,9 @@ import 'systems/progress_store.dart';
 import 'systems/score_manager.dart';
 import 'systems/vertical_motion.dart';
 
-/// Flame game root for `SOUL: DUSK RUN` (`0.17.0+17` — Living 3D Fantasy
-/// Valley, Volumetric Dark Storm Clouds & Radiant Golden Dawn Bounce-Clouds).
+/// Flame game root for `SOUL: DUSK RUN` (`0.18.0+18` — 100% Modular 3D Element
+/// World, Low Over-the-Shoulder Chase Camera, Full-Width `1/Z` 3D Water/Valley
+/// Plane, 3D Extruded Stone Causeway Curbs, Sky Citadels & Canyon Cliffs).
 class SoulDuskRunGame extends FlameGame {
   SoulDuskRunGame({int seed = 0, this.selectedWorld = GameWorld.duskHollow})
       : _seed = seed;
@@ -50,6 +51,11 @@ class SoulDuskRunGame extends FlameGame {
   ui.Image? soulSlideSprite;
   ui.Image? worldBackdrop;
   ui.Image? trackStrip;
+  ui.Image? valleyFloor;
+  ui.Image? canyonWall;
+  ui.Image? skyCitadel;
+  ui.Image? viaductRuin;
+  ui.Image? skyCloud;
   ui.Image? corridorPillar;
   ui.Image? floatingIsland;
   ui.Image? cliffSide;
@@ -103,15 +109,40 @@ class SoulDuskRunGame extends FlameGame {
   }
 
   // ---------------------------------------------------------------
-  // S17 Rock-Steady `2.95x` 3D Chase Camera
+  // S18 Low Over-the-Shoulder `3.60x` 3D Chase Camera
   // ---------------------------------------------------------------
 
   double get horizonY => size.y * GameConfig.horizonRatio;
   double get playerPlaneY => size.y * GameConfig.playerPlaneRatio;
 
+  /// Smooth scenic winding S-curve factor (`-1..1`), `0.0` while idle before
+  /// the first tap so Soul stands symmetrically framed at run start.
+  double get roadCurveFactor {
+    if (!_runStarted) {
+      return 0.0;
+    }
+    return math.sin(_travelled * 0.00135) * 0.65 +
+        math.sin(_travelled * 0.00055) * 0.35;
+  }
+
+  double curveOffsetForDepth(double depth) {
+    if (depth <= 0.0) {
+      return 0.0;
+    }
+    final d = depth.clamp(0.0, 1.15).toDouble();
+    return roadCurveFactor * (d * d) * size.x * GameConfig.roadCurveRatio;
+  }
+
+  double archLiftForDepth(double depth) {
+    if (depth <= 0.0 || depth >= 1.0) {
+      return 0.0;
+    }
+    return math.sin(depth * math.pi) * size.y * GameConfig.bridgeArchRatio;
+  }
+
   double perspectiveFactor(double depth) {
     final z = (1.0 + depth * (GameConfig.farDepthRatio - 1.0))
-        .clamp(0.72, 8.0)
+        .clamp(0.45, 8.0)
         .toDouble();
     return 1.0 / z;
   }
@@ -120,7 +151,7 @@ class SoulDuskRunGame extends FlameGame {
     final span = math.max(1.0, playerPlaneY - horizonY);
     const pFar = GameConfig.farScale;
     final t = (y - horizonY) / span;
-    final p = (pFar + t * (1.0 - pFar)).clamp(0.125, 1.38).toDouble();
+    final p = (pFar + t * (1.0 - pFar)).clamp(0.125, 2.25).toDouble();
     final z = 1.0 / p;
     return (z - 1.0) / (GameConfig.farDepthRatio - 1.0);
   }
@@ -129,7 +160,14 @@ class SoulDuskRunGame extends FlameGame {
     const pFar = GameConfig.farScale;
     final p = perspectiveFactor(depth);
     final t = (p - pFar) / (1.0 - pFar);
-    return horizonY + (playerPlaneY - horizonY) * t;
+    return horizonY + (playerPlaneY - horizonY) * t - archLiftForDepth(depth);
+  }
+
+  /// Screen Y on the sunken 3D water/valley floor plane below the elevated
+  /// ancient stone causeway.
+  double valleyYForDepth(double depth) {
+    return yForDepth(depth) +
+        size.y * GameConfig.valleyDropRatio * perspectiveFactor(depth);
   }
 
   double halfWidthForDepth(double depth) =>
@@ -138,7 +176,8 @@ class SoulDuskRunGame extends FlameGame {
   double trackCenterXForDepth(double depth) {
     final center = (GameConfig.laneCount - 1) / 2;
     final camOffset = (_cameraLane - center) * GameConfig.cameraFollowRatio;
-    return size.x / 2 -
+    return size.x / 2 +
+        curveOffsetForDepth(depth) -
         camOffset * halfWidthForDepth(depth) * GameConfig.laneSpreadRatio;
   }
 
@@ -179,7 +218,7 @@ class SoulDuskRunGame extends FlameGame {
   Future<void> _preloadArt() async {
     worldBackdrop = await _tryLoadImage(
       GameConfig.backdropKeyFor(selectedWorld),
-      'World backdrop',
+      'Sky atmosphere dome',
     );
     try {
       soulSprite = await loadKeyedSprite(GameConfig.soulSpriteAsset);
@@ -196,6 +235,26 @@ class SoulDuskRunGame extends FlameGame {
     trackStrip = trackKey == null
         ? null
         : await _tryLoadImage(trackKey, 'Track strip');
+    valleyFloor = await _tryLoadImage(
+      GameConfig.valleyFloorKeyFor(selectedWorld),
+      '3D valley/water floor',
+    );
+    canyonWall = await _tryLoadImage(
+      GameConfig.canyonWallKeyFor(selectedWorld),
+      '3D canyon cliff wall',
+    );
+    skyCitadel = await _tryLoadImage(
+      GameConfig.skyCitadelKeyFor(selectedWorld),
+      '3D levitating sky citadel',
+    );
+    viaductRuin = await _tryLoadImage(
+      GameConfig.viaductRuinSpriteAsset,
+      '3D stone viaduct ruin',
+    );
+    skyCloud = await _tryLoadImage(
+      GameConfig.skyCloudSpriteAsset,
+      '3D volumetric sky cloud',
+    );
     corridorPillar = await _tryLoadImage(
       GameConfig.corridorPillarKeyFor(selectedWorld),
       'Parapet lantern',
@@ -321,8 +380,6 @@ class SoulDuskRunGame extends FlameGame {
     }
   }
 
-  /// Launches Soul off a Radiant Golden Dawn Bounce-Cloud into a soaring
-  /// golden sky-arc!
   void triggerCloudBounce(Vector2 cloudCenter) {
     if (_ended || paused || !_runStarted) {
       return;
@@ -442,7 +499,6 @@ class SoulDuskRunGame extends FlameGame {
       }
     }
 
-    // 1. Safe-lane / S-curve Sun Orb guide
     final orbLane = wave.orbLane;
     if (orbLane != null && wave.orbTrailCount > 0) {
       final slalom = wave.slalomLanes;
@@ -456,7 +512,6 @@ class SoulDuskRunGame extends FlameGame {
       }
     }
 
-    // 2. Parabolic jump-reward arc over Crystal Spikes
     final arcLane = wave.jumpArcLane;
     if (arcLane != null && !powerUps.isSolarDashing) {
       const arcCount = 5;
@@ -470,7 +525,6 @@ class SoulDuskRunGame extends FlameGame {
       }
     }
 
-    // 3. Slide-tunnel Sun Orbs directly underneath Ancient Rune Vine Arches
     final slideLane = wave.slideTunnelLane;
     if (slideLane != null && !powerUps.isSolarDashing) {
       const tunnelOrbs = 4;
@@ -483,7 +537,6 @@ class SoulDuskRunGame extends FlameGame {
       }
     }
 
-    // 4. Soaring Cathedral Sky-Arc of Sun Orbs ahead of a Golden Dawn Cloud!
     final bounceLane = wave.roofCoinLane;
     if (bounceLane != null && !powerUps.isSolarDashing) {
       const skyArcCount = 5;

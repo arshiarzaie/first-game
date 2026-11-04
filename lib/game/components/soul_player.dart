@@ -7,16 +7,8 @@ import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
 /// The Soul — Pixar-3D volumetric golden sun-child runner (`SOUL: DUSK RUN`
-/// S16, faithful to the Official Concept Board).
-///
-/// Features:
-///  * Warm radiant golden light reflection cast onto the stone bridge (just
-///    like `حین بازی` & `A. پشت شخصیت` on the Concept Board!);
-///  * Celestial Golden Sun-Disk (`hasShield`) floating beneath Soul's feet;
-///  * Sky-Leap golden aura rings (`hasSuperSneakers`) & Solar Comet Wings
-///    (`isSolarDashing`);
-///  * Smooth cubic ease-out lane carve, athletic hop arc, and landing cushion
-///    on both ancient stone bridges AND elevated stone sanctuary platforms!
+/// S18, low over-the-shoulder chase camera + silky golden sunbeam reflection
+/// streaming down the chiseled stone slabs!).
 class SoulPlayer extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   SoulPlayer() : super(priority: 2000);
@@ -172,25 +164,81 @@ class SoulPlayer extends PositionComponent
     final footAnchorShift = dh * 0.37;
     final supportFloorY = h / 2 - supportLiftPx;
     final shadowScale =
-        (1.0 - airAboveSupport * 0.42).clamp(0.45, 1.0).toDouble();
+        (1.0 - airAboveSupport * 0.42).clamp(0.42, 1.0).toDouble();
 
-    // Warm golden light reflection cast onto the stone bridge beneath Soul
-    // (signature `SOUL: DUSK RUN` lighting from the Concept Board!)
+    // S18 Signature Silky Golden Sunbeam Ground Reflection & Trail on Flagstones!
+    final trailLen =
+        math.max(dh * 0.65, (game.size.y - position.y) + supportFloorY);
+    final shimmer = 0.90 + 0.10 * math.sin(_elapsed * 9.5);
+    final trailAlpha = (shadowScale * shimmer).clamp(0.32, 1.0).toDouble();
+
+    // Wide warm golden specular pool on the stone slabs around Soul
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(w / 2, supportFloorY + 3),
-        width: dw * 0.72 * shadowScale,
-        height: dh * 0.15 * shadowScale,
+        center: Offset(w / 2, supportFloorY + 5),
+        width: dw * 0.92 * shadowScale,
+        height: dh * 0.20 * shadowScale,
       ),
-      Paint()..color = const Color(0x44FFBE4C),
+      Paint()
+        ..color = const Color(0xFFFFB844).withValues(alpha: 0.34 * trailAlpha)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0),
     );
+
+    // Streaming golden reflection streak toward the camera behind Soul's feet!
+    final streakOuter = Path()
+      ..moveTo(w / 2 - dw * 0.15 * shadowScale, supportFloorY + 2)
+      ..lineTo(w / 2 + dw * 0.15 * shadowScale, supportFloorY + 2)
+      ..lineTo(w / 2 + dw * 0.055, supportFloorY + trailLen)
+      ..lineTo(w / 2 - dw * 0.055, supportFloorY + trailLen)
+      ..close();
+    canvas.drawPath(
+      streakOuter,
+      Paint()
+        ..shader = Gradient.linear(
+          Offset(w / 2, supportFloorY),
+          Offset(w / 2, supportFloorY + trailLen),
+          [
+            const Color(0xFFFFBC48).withValues(alpha: 0.56 * trailAlpha),
+            const Color(0xFFFF9632).withValues(alpha: 0.24 * trailAlpha),
+            const Color(0x00FF8424),
+          ],
+          const [0.0, 0.55, 1.0],
+        )
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.5),
+    );
+
+    if (game.isRunStarted) {
+      final streakCore = Path()
+        ..moveTo(w / 2 - dw * 0.055 * shadowScale, supportFloorY + 1)
+        ..lineTo(w / 2 + dw * 0.055 * shadowScale, supportFloorY + 1)
+        ..lineTo(w / 2 + dw * 0.018, supportFloorY + trailLen * 0.88)
+        ..lineTo(w / 2 - dw * 0.018, supportFloorY + trailLen * 0.88)
+        ..close();
+      canvas.drawPath(
+        streakCore,
+        Paint()
+          ..shader = Gradient.linear(
+            Offset(w / 2, supportFloorY),
+            Offset(w / 2, supportFloorY + trailLen * 0.88),
+            [
+              const Color(0xFFFFF8CA).withValues(alpha: 0.78 * trailAlpha),
+              const Color(0xFFFFCA58).withValues(alpha: 0.34 * trailAlpha),
+              const Color(0x00FFB438),
+            ],
+            const [0.0, 0.50, 1.0],
+          )
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0),
+      );
+    }
+
+    // Grounded contact shadow directly beneath Soul's feet
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(w / 2, supportFloorY + 2),
-        width: dw * 0.42 * shadowScale,
-        height: dh * 0.08 * shadowScale,
+        center: Offset(w / 2 - dw * 0.04, supportFloorY + 3),
+        width: dw * 0.44 * shadowScale,
+        height: dh * 0.085 * shadowScale,
       ),
-      Paint()..color = const Color(0x66221632),
+      Paint()..color = const Color(0x701C122C),
     );
 
     final hoverSurfBob = game.powerUps.hasShield

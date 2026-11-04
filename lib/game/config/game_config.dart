@@ -9,7 +9,7 @@ class GameConfig {
   static const int laneCount = 3;
   static const int initialLane = 1;
 
-  // ---- Speed / difficulty (S17: silky-smooth Soul Runner pacing) ----
+  // ---- Speed / difficulty (S18: silky-smooth Soul Runner pacing) ----
   static const double startSpeed = 280;
   static const double maxSpeed = 540;
   static const double speedRampPerSecond = 5.5;
@@ -41,23 +41,33 @@ class GameConfig {
   static const double scorePerWorldUnit = 0.025;
   static const int orbScore = 10;
 
-  // ---- S17 Living 3D Valley Perspective (`2.95x` natural convergence) ----
-  static const double farDepthRatio = 2.95;
-  static const double horizonRatio = 0.29;
-  static const double playerPlaneRatio = 0.78;
+  // ---- S18 Low Over-the-Shoulder 3D Chase Camera (`3.60x` deep perspective) ----
+  static const double farDepthRatio = 3.60;
+  static const double horizonRatio = 0.38;
+  static const double playerPlaneRatio = 0.75;
   static const double farScale = 1.0 / farDepthRatio;
 
+  /// Subtle sculpted 3D crown/arch of the ancient stone causeway.
+  static const double bridgeArchRatio = 0.007;
+
+  /// 3D elevation drop of the valley/water plane beneath the stone bridge.
+  static const double valleyDropRatio = 0.085;
+
+  /// Gentle scenic S-curve amplitude toward the distant horizon.
+  static const double roadCurveRatio = 0.095;
+
   /// Half-width of the floating ancient stone bridge at Soul's plane.
-  static const double trackBottomHalfWidthRatio = 0.35;
+  static const double trackBottomHalfWidthRatio = 0.355;
   static const double trackTopHalfWidthRatio =
       trackBottomHalfWidthRatio / farDepthRatio;
 
-  static const double trackTileRepeats = 1.55;
+  static const double trackTileRepeats = 2.05;
+  static const double valleyTileRepeats = 2.40;
   static const double cameraFollowRatio = 0.30;
   static const double laneSpreadRatio = 0.58;
 
   // ---- Entity sizing & forgiving side-bump stumble ----
-  static const double playerWidthRatio = 0.235;
+  static const double playerWidthRatio = 0.255;
   static const double entityWidthRatio = 0.22;
   static const double hitboxFactor = 0.72;
   static const double collisionLaneThreshold = 0.27;
@@ -91,6 +101,8 @@ class GameConfig {
   static const String obstacleMonolithSpriteAsset =
       'props/obstacle_monolith.png';
   static const String goldenCloudSpriteAsset = 'props/golden_cloud.png';
+  static const String viaductRuinSpriteAsset = 'props/viaduct_ruin.png';
+  static const String skyCloudSpriteAsset = 'props/sky_cloud.png';
 
   static const String duskHollowPillarKey =
       'worlds/dusk_hollow/corridor_pillar.png';
@@ -132,6 +144,39 @@ class GameConfig {
     }
   }
 
+  static String valleyFloorKeyFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 'worlds/dusk_hollow/valley_floor.png';
+      case GameWorld.moonveilMarsh:
+        return 'worlds/moonveil_marsh/valley_floor.png';
+      case GameWorld.emberfallCanyon:
+        return 'worlds/emberfall_canyon/valley_floor.png';
+    }
+  }
+
+  static String canyonWallKeyFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 'worlds/dusk_hollow/canyon_wall.png';
+      case GameWorld.moonveilMarsh:
+        return 'worlds/moonveil_marsh/canyon_wall.png';
+      case GameWorld.emberfallCanyon:
+        return 'worlds/emberfall_canyon/canyon_wall.png';
+    }
+  }
+
+  static String skyCitadelKeyFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 'worlds/dusk_hollow/sky_citadel.png';
+      case GameWorld.moonveilMarsh:
+        return 'worlds/moonveil_marsh/sky_citadel.png';
+      case GameWorld.emberfallCanyon:
+        return 'worlds/emberfall_canyon/sky_citadel.png';
+    }
+  }
+
   static const String duskHollowBackdropKey =
       'worlds/dusk_hollow/backdrop.png';
   static const String moonveilMarshBackdropKey =
@@ -157,7 +202,7 @@ class GameConfig {
     }
   }
 
-  static const double backdropHorizonFraction = 0.28;
+  static const double backdropHorizonFraction = 0.42;
 
   static String backdropKeyFor(GameWorld world) {
     switch (world) {
@@ -193,11 +238,11 @@ class GameConfig {
   static int trackEdgeArgbFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
-        return 0xFF8876A8;
+        return 0xFF8E7EAE;
       case GameWorld.moonveilMarsh:
-        return 0xFF5CA8AE;
+        return 0xFF4E828E;
       case GameWorld.emberfallCanyon:
-        return 0xFFE2AE74;
+        return 0xFFD69E68;
     }
   }
 
@@ -246,8 +291,8 @@ class GameConfig {
   }
 
   static const double backdropDriftAmplitude = 0.0;
-  static const double cameraSwayPerLane = 10;
-  static const int ambientParticleCount = 16;
+  static const double cameraSwayPerLane = 12;
+  static const int ambientParticleCount = 20;
   static const double playerBobRatio = 0.024;
   static const double playerLeanAngle = 0.15;
 
@@ -256,7 +301,7 @@ class GameConfig {
   static const int runFrameCount = 8;
   static const double runCycleFps = 13.5;
   static const int runIdleFrame = 1;
-  static const double runCycleFitBoost = 1.12;
+  static const double runCycleFitBoost = 1.14;
 }
 
 enum GameWorld { duskHollow, moonveilMarsh, emberfallCanyon }
