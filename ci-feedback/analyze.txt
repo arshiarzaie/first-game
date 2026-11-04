@@ -11,5 +11,8 @@ Got dependencies!
 Try `flutter pub outdated` for more information.
 Analyzing first-game...                                         
 
-  error • The argument type 'num' can't be assigned to the parameter type 'double'.  • lib/game/components/track_scene.dart:166:25 • argument_type_not_assignable
+warning • The value of the local variable 'hw' isn't used. Try removing the variable or using it • lib/game/components/track_scene.dart:213:13 • unused_local_variable
+warning • The value of the local variable 'cx' isn't used. Try removing the variable or using it • lib/game/components/track_scene.dart:214:13 • unused_local_variable
+warning • The value of the local variable 'yb' isn't used. Try removing the variable or using it • lib/game/components/track_scene.dart:215:13 • unused_local_variable
+warning • The value of the local variable 'ih' isn't used. Try removing the variable or using it • lib/game/components/track_scene.dart:219:13 • unused_local_variable
 
