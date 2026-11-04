@@ -1,16 +1,7 @@
 import '../config/game_config.dart';
 
-/// Pure-Dart vertical kinetics for Soul (S13 Subway-tier 4-way controls +
-/// pre-landing jump input buffer).
-///
-/// Supports:
-///  * Parabolic jump (`jump()`) with normalized height in `[0, 1]`;
-///  * Pre-landing jump buffering: swiping Up during the final 30% of descent
-///    queues an immediate rebound jump on touchdown instead of dropping input;
-///  * Ground tuck-slide (`slide()`) to duck underneath overhead rune gates;
-///  * Slide-cancel into jump (swiping up while sliding launches immediately);
-///  * Mid-air fast-fall slam (`slide()` while airborne drops rapidly and
-///    chains straight into a ground slide upon landing).
+/// Pure-Dart vertical kinetics for Soul (S17: 4-way controls, pre-landing jump
+/// buffer, fast-fall slam, AND Golden Dawn Cloud sky-bounce arcs!).
 class VerticalMotion {
   VerticalMotion({
     this.jumpDuration = GameConfig.jumpDurationSeconds,
@@ -26,6 +17,8 @@ class VerticalMotion {
   final double clearThreshold;
 
   double _jumpProgress = 0;
+  double _activeHeightScale = 1.0;
+  double _activeDurationScale = 1.0;
   bool _jumping = false;
   bool _fastFalling = false;
   bool _queuedSlide = false;
@@ -36,23 +29,19 @@ class VerticalMotion {
   bool get isFastFalling => _fastFalling;
   bool get isSliding => !_jumping && _slideRemaining > 0;
 
-  /// Normalized parabolic height in `[0, 1]` (0 on ground, 1 at apex).
+  /// Normalized parabolic height (`0` on ground, `1.0` at normal jump apex,
+  /// `> 1.0` when launched by a Golden Dawn Bounce-Cloud!).
   double get jumpHeight {
     if (!_jumping) {
       return 0;
     }
     final p = _jumpProgress.clamp(0.0, 1.0);
-    return 4 * p * (1 - p);
+    return 4 * p * (1 - p) * _activeHeightScale;
   }
 
-  /// True while high enough to vault cleanly over low ground obstacles.
   bool get isClearingLow => jumpHeight >= clearThreshold;
-
-  /// True while crouched on the ground underneath overhead arch barriers.
   bool get isDuckingHigh => isSliding;
 
-  /// Triggers a jump (cancelling an active ground slide if needed), or queues
-  /// an instant rebound jump if Soul is near touchdown (`progress >= 0.70`).
   bool jump() {
     if (_jumping) {
       if (_jumpProgress >= 0.70) {
@@ -65,12 +54,29 @@ class VerticalMotion {
     _queuedSlide = false;
     _queuedJump = false;
     _fastFalling = false;
+    _activeHeightScale = 1.0;
+    _activeDurationScale = 1.0;
     _jumping = true;
     _jumpProgress = 0;
     return true;
   }
 
-  /// Triggers a ground slide, or a fast-fall slam + landing slide if airborne.
+  /// Launches Soul into a graceful, high Golden Dawn Cloud sky-arc (can be
+  /// triggered from the ground or mid-air!).
+  void bounce({
+    double heightScale = GameConfig.goldenCloudBounceMultiplier,
+    double durationScale = GameConfig.goldenCloudDurationScale,
+  }) {
+    _slideRemaining = 0;
+    _queuedSlide = false;
+    _queuedJump = false;
+    _fastFalling = false;
+    _activeHeightScale = heightScale;
+    _activeDurationScale = durationScale;
+    _jumping = true;
+    _jumpProgress = 0;
+  }
+
   void slide() {
     _queuedJump = false;
     if (_jumping) {
@@ -89,12 +95,15 @@ class VerticalMotion {
       return;
     }
     if (_jumping) {
-      final rate = (_fastFalling ? fastFallMultiplier : 1.0) / jumpDuration;
+      final duration = jumpDuration * _activeDurationScale;
+      final rate = (_fastFalling ? fastFallMultiplier : 1.0) / duration;
       _jumpProgress += dt * rate;
       if (_jumpProgress >= 1.0) {
         _jumping = false;
         _jumpProgress = 0;
         _fastFalling = false;
+        _activeHeightScale = 1.0;
+        _activeDurationScale = 1.0;
         if (_queuedJump) {
           _queuedJump = false;
           _queuedSlide = false;
@@ -118,6 +127,8 @@ class VerticalMotion {
   void reset() {
     _jumping = false;
     _jumpProgress = 0;
+    _activeHeightScale = 1.0;
+    _activeDurationScale = 1.0;
     _fastFalling = false;
     _queuedSlide = false;
     _queuedJump = false;

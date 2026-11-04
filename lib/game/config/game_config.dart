@@ -9,25 +9,25 @@ class GameConfig {
   static const int laneCount = 3;
   static const int initialLane = 1;
 
-  // ---- Speed / difficulty (S16: silky-smooth Soul Runner pacing) ----
+  // ---- Speed / difficulty (S17: silky-smooth Soul Runner pacing) ----
   static const double startSpeed = 280;
   static const double maxSpeed = 540;
   static const double speedRampPerSecond = 5.5;
 
-  /// Extra oncoming speed of awakened sliding Obsidian Rune Monoliths.
-  static const double movingTrainExtraSpeed = 110;
+  /// Extra oncoming drift speed of Tempest Dark Storm Clouds.
+  static const double movingTrainExtraSpeed = 95;
 
   // ---- World geometry ----
   static const double trackLength = 960;
 
-  /// 3D depth length of an elevated Ancient Stone Sanctuary Platform.
-  static const double trainLengthDepth = 0.28;
+  /// Normalized clearance threshold to soar cleanly above Dark Storm Clouds.
+  static const double stormCloudClearElevation = 0.88;
 
-  /// 3D depth length of a Carved Stone Stair-Ramp leading onto a platform.
-  static const double rampLengthDepth = 0.052;
+  /// Peak height boost of a Golden Dawn Bounce-Cloud sky-arc (`1.45x` jump).
+  static const double goldenCloudBounceMultiplier = 1.45;
 
-  /// Normalized elevation of walkable 3D Ancient Stone Platforms (`0.90`).
-  static const double trainRoofElevation = 0.90;
+  /// Duration scale of a Golden Dawn Bounce-Cloud sky-arc (`1.38x` floatier).
+  static const double goldenCloudDurationScale = 1.38;
 
   // ---- Spawning fairness ----
   static const double reactionTimeSeconds = 0.52;
@@ -41,28 +41,27 @@ class GameConfig {
   static const double scorePerWorldUnit = 0.025;
   static const int orbScore = 10;
 
-  // ---- S16 Cinematic `SOUL: DUSK RUN` 3D Camera (Concept Board Camera A) ----
-  static const double farDepthRatio = 2.30;
-  static const double horizonRatio = 0.28;
+  // ---- S17 Living 3D Valley Perspective (`2.95x` natural convergence) ----
+  static const double farDepthRatio = 2.95;
+  static const double horizonRatio = 0.29;
   static const double playerPlaneRatio = 0.78;
   static const double farScale = 1.0 / farDepthRatio;
 
-  /// Half-width of the floating 3-lane ancient stone causeway at Soul's plane
-  /// (`68%` width so both lush painted fantasy valley flanks stay visible!).
-  static const double trackBottomHalfWidthRatio = 0.34;
+  /// Half-width of the floating ancient stone bridge at Soul's plane.
+  static const double trackBottomHalfWidthRatio = 0.35;
   static const double trackTopHalfWidthRatio =
       trackBottomHalfWidthRatio / farDepthRatio;
 
-  static const double trackTileRepeats = 1.5;
+  static const double trackTileRepeats = 1.55;
   static const double cameraFollowRatio = 0.30;
   static const double laneSpreadRatio = 0.58;
 
   // ---- Entity sizing & forgiving side-bump stumble ----
   static const double playerWidthRatio = 0.235;
-  static const double entityWidthRatio = 0.215;
+  static const double entityWidthRatio = 0.22;
   static const double hitboxFactor = 0.72;
   static const double collisionLaneThreshold = 0.27;
-  static const double stumbleLaneThreshold = 0.44;
+  static const double stumbleLaneThreshold = 0.43;
   static const double stumbleRecoverySeconds = 2.6;
 
   // ---- 4-way vertical kinetics & Soul Light Blessings ----
@@ -91,6 +90,7 @@ class GameConfig {
   static const String obstacleArchSpriteAsset = 'props/obstacle_arch.png';
   static const String obstacleMonolithSpriteAsset =
       'props/obstacle_monolith.png';
+  static const String goldenCloudSpriteAsset = 'props/golden_cloud.png';
 
   static const String duskHollowPillarKey =
       'worlds/dusk_hollow/corridor_pillar.png';
@@ -107,6 +107,28 @@ class GameConfig {
         return moonveilMarshPillarKey;
       case GameWorld.emberfallCanyon:
         return emberfallCanyonPillarKey;
+    }
+  }
+
+  static String floatingIslandKeyFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 'worlds/dusk_hollow/floating_island.png';
+      case GameWorld.moonveilMarsh:
+        return 'worlds/moonveil_marsh/floating_island.png';
+      case GameWorld.emberfallCanyon:
+        return 'worlds/emberfall_canyon/floating_island.png';
+    }
+  }
+
+  static String cliffSideKeyFor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 'worlds/dusk_hollow/cliff_side.png';
+      case GameWorld.moonveilMarsh:
+        return 'worlds/moonveil_marsh/cliff_side.png';
+      case GameWorld.emberfallCanyon:
+        return 'worlds/emberfall_canyon/cliff_side.png';
     }
   }
 
@@ -135,7 +157,6 @@ class GameConfig {
     }
   }
 
-  /// Horizon fraction of the full-portrait `900×1680` cinematic world vistas.
   static const double backdropHorizonFraction = 0.28;
 
   static String backdropKeyFor(GameWorld world) {
@@ -158,7 +179,6 @@ class GameConfig {
     }
   }
 
-  /// Ancient stone causeway base tint per world (alpha > 0x40).
   static int trackFillArgbFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
@@ -170,7 +190,6 @@ class GameConfig {
     }
   }
 
-  /// Carved stone parapet curb tint per world (alpha > 0x40).
   static int trackEdgeArgbFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
@@ -182,7 +201,6 @@ class GameConfig {
     }
   }
 
-  /// Glowing magical lane-channel rune light tint per world (alpha > 0x40).
   static int trackLaneArgbFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
@@ -194,7 +212,6 @@ class GameConfig {
     }
   }
 
-  /// Subtle weathered stone joint tint per world (alpha > 0x40).
   static int trackStripeArgbFor(GameWorld world) {
     switch (world) {
       case GameWorld.duskHollow:
@@ -230,7 +247,7 @@ class GameConfig {
 
   static const double backdropDriftAmplitude = 0.0;
   static const double cameraSwayPerLane = 10;
-  static const int ambientParticleCount = 0;
+  static const int ambientParticleCount = 16;
   static const double playerBobRatio = 0.024;
   static const double playerLeanAngle = 0.15;
 

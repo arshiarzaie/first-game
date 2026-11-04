@@ -40,10 +40,13 @@ void main() {
     expect(pillarKeys.toSet().length, equals(GameWorld.values.length));
     for (final key in [
       ...pillarKeys,
+      ...GameWorld.values.map(GameConfig.floatingIslandKeyFor),
+      ...GameWorld.values.map(GameConfig.cliffSideKeyFor),
       GameConfig.orbSpriteAsset,
       GameConfig.obstacleSpriteAsset,
       GameConfig.obstacleArchSpriteAsset,
       GameConfig.obstacleMonolithSpriteAsset,
+      GameConfig.goldenCloudSpriteAsset,
     ]) {
       expect(key.startsWith('assets/'), isFalse,
           reason: 'Flame images.load keys must not double-prefix assets/');

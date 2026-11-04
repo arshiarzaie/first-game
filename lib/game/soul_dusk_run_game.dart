@@ -21,20 +21,8 @@ import 'systems/progress_store.dart';
 import 'systems/score_manager.dart';
 import 'systems/vertical_motion.dart';
 
-/// Flame game root for SOUL: DUSK RUN (S15 Subway-Surfers-Grade Sunlit 3D
-/// Overhaul).
-///
-/// Delivers the complete Subway Surfers gameplay loop & eye-friendly polish:
-///  * Bright sunlit full-width 3D boulevard worlds with rock-steady horizon
-///    (zero dark tunnel glare, zero horizon bobbing, zero screen-shake eye
-///    strain);
-///  * True 8-vertex `1/Z` 3D extruded Subway Trains (parked Blue & oncoming
-///    Red Express), 6-vertex 3D Boarding Ramps, and walkable 3D Train Roofs
-///    with roof-to-roof jumping & smooth gravity drop-off;
-///  * Full Subway Surfers power-up suite: Hoverboard (`activateSolarShield`),
-///    Jetpack (`solarDash`), Super Sneakers (`superSneakers`), Coin Magnet,
-///    and 2x Multiplier;
-///  * Side-clip stumble bounce recovery (`onObstacleSideStumble`).
+/// Flame game root for `SOUL: DUSK RUN` (`0.17.0+17` — Living 3D Fantasy
+/// Valley, Volumetric Dark Storm Clouds & Radiant Golden Dawn Bounce-Clouds).
 class SoulDuskRunGame extends FlameGame {
   SoulDuskRunGame({int seed = 0, this.selectedWorld = GameWorld.duskHollow})
       : _seed = seed;
@@ -63,10 +51,13 @@ class SoulDuskRunGame extends FlameGame {
   ui.Image? worldBackdrop;
   ui.Image? trackStrip;
   ui.Image? corridorPillar;
+  ui.Image? floatingIsland;
+  ui.Image? cliffSide;
   ui.Image? orbSprite;
   ui.Image? obstacleSprite;
   ui.Image? obstacleArchSprite;
   ui.Image? obstacleMonolithSprite;
+  ui.Image? goldenCloudSprite;
   List<ui.Image> runFrames = const [];
 
   double _elapsedSeconds = 0;
@@ -76,8 +67,6 @@ class SoulDuskRunGame extends FlameGame {
   double _dashOrbTimer = 0;
   double _hudNotifyTimer = 0;
   double _cameraLane = GameConfig.initialLane.toDouble();
-  double _baseSupportElevation = 0;
-  double _fallVelocity = 0;
   double _stumbleTimer = 0;
   bool _ended = false;
   int _runNumber = 0;
@@ -91,10 +80,7 @@ class SoulDuskRunGame extends FlameGame {
   bool get isRunStarted => _runStarted;
   bool get isStumbling => _stumbleTimer > 0;
   double get cameraLane => _cameraLane;
-
-  /// Active floor height under Soul (`0.0` on rails, `0.90` when running on
-  /// top of a 3D train roof!).
-  double get baseSupportElevation => _baseSupportElevation;
+  double get baseSupportElevation => 0.0;
 
   double get currentSpeed {
     if (!_runStarted) {
@@ -106,7 +92,6 @@ class SoulDuskRunGame extends FlameGame {
         : base;
   }
 
-  /// Total vertical elevation of Soul above the rails.
   double get effectivePlayerElevation {
     if (powerUps.isSolarDashing) {
       return 1.38;
@@ -114,11 +99,11 @@ class SoulDuskRunGame extends FlameGame {
     final jumpMult = powerUps.hasSuperSneakers
         ? GameConfig.superSneakersJumpMultiplier
         : 1.0;
-    return _baseSupportElevation + verticalMotion.jumpHeight * jumpMult;
+    return verticalMotion.jumpHeight * jumpMult;
   }
 
   // ---------------------------------------------------------------
-  // S15 Rock-Steady `2.30x` 3D Chase Camera (zero horizon jitter!)
+  // S17 Rock-Steady `2.95x` 3D Chase Camera
   // ---------------------------------------------------------------
 
   double get horizonY => size.y * GameConfig.horizonRatio;
@@ -126,7 +111,7 @@ class SoulDuskRunGame extends FlameGame {
 
   double perspectiveFactor(double depth) {
     final z = (1.0 + depth * (GameConfig.farDepthRatio - 1.0))
-        .clamp(0.74, 8.0)
+        .clamp(0.72, 8.0)
         .toDouble();
     return 1.0 / z;
   }
@@ -135,7 +120,7 @@ class SoulDuskRunGame extends FlameGame {
     final span = math.max(1.0, playerPlaneY - horizonY);
     const pFar = GameConfig.farScale;
     final t = (y - horizonY) / span;
-    final p = (pFar + t * (1.0 - pFar)).clamp(0.125, 1.35).toDouble();
+    final p = (pFar + t * (1.0 - pFar)).clamp(0.125, 1.38).toDouble();
     final z = 1.0 / p;
     return (z - 1.0) / (GameConfig.farDepthRatio - 1.0);
   }
@@ -213,17 +198,29 @@ class SoulDuskRunGame extends FlameGame {
         : await _tryLoadImage(trackKey, 'Track strip');
     corridorPillar = await _tryLoadImage(
       GameConfig.corridorPillarKeyFor(selectedWorld),
-      'Corridor pillar',
+      'Parapet lantern',
+    );
+    floatingIsland = await _tryLoadImage(
+      GameConfig.floatingIslandKeyFor(selectedWorld),
+      'Floating valley island',
+    );
+    cliffSide = await _tryLoadImage(
+      GameConfig.cliffSideKeyFor(selectedWorld),
+      'Bridge-edge flora & crystals',
     );
     obstacleSprite =
-        await _tryLoadImage(GameConfig.obstacleSpriteAsset, 'Low barrier');
+        await _tryLoadImage(GameConfig.obstacleSpriteAsset, 'Crystal spikes');
     obstacleArchSprite = await _tryLoadImage(
       GameConfig.obstacleArchSpriteAsset,
-      'High roll barrier',
+      'Rune stone archway',
     );
     obstacleMonolithSprite = await _tryLoadImage(
       GameConfig.obstacleMonolithSpriteAsset,
-      'Subway train',
+      'Dark storm cloud',
+    );
+    goldenCloudSprite = await _tryLoadImage(
+      GameConfig.goldenCloudSpriteAsset,
+      'Golden dawn bounce cloud',
     );
     orbSprite = await _tryLoadImage(GameConfig.orbSpriteAsset, 'Energy orb');
 
@@ -246,7 +243,6 @@ class SoulDuskRunGame extends FlameGame {
   void update(double dt) {
     super.update(dt);
 
-    // Smooth critically-damped lateral chase camera follow (zero jitter!).
     final camFollow = (1.0 - math.exp(-dt * 9.0)).clamp(0.0, 1.0).toDouble();
     _cameraLane += (player.currentLane - _cameraLane) * camFollow;
 
@@ -261,9 +257,6 @@ class SoulDuskRunGame extends FlameGame {
     _elapsedSeconds += dt;
     verticalMotion.update(dt);
     powerUps.update(dt);
-
-    // Update 3D Train Roof & Boarding Ramp floor elevation under Soul!
-    _updateTrainRoofSupport(dt);
 
     final ds = currentSpeed * dt;
     _travelled += ds;
@@ -296,33 +289,6 @@ class SoulDuskRunGame extends FlameGame {
     }
   }
 
-  void _updateTrainRoofSupport(double dt) {
-    var targetSupport = 0.0;
-    final currentTotal = effectivePlayerElevation;
-    for (final obs in children.whereType<Obstacle>()) {
-      final s = obs.supportElevationForPlayer(player.currentLane, currentTotal);
-      if (s > targetSupport) {
-        targetSupport = s;
-      }
-    }
-
-    if (targetSupport >= _baseSupportElevation) {
-      // Climbing ramp or running across train roof!
-      _baseSupportElevation = targetSupport;
-      _fallVelocity = 0;
-    } else if (!verticalMotion.isJumping) {
-      // Stepped off the back or side of a train roof -> smooth gravity drop!
-      final gravity = verticalMotion.isFastFalling ? 14.0 : 5.2;
-      _fallVelocity += gravity * dt;
-      _baseSupportElevation =
-          math.max(targetSupport, _baseSupportElevation - _fallVelocity * dt);
-      if (_baseSupportElevation <= targetSupport + 1e-4) {
-        _baseSupportElevation = targetSupport;
-        _fallVelocity = 0;
-      }
-    }
-  }
-
   // --------------------------------------------------------------- gameplay
 
   void startRun() {
@@ -349,13 +315,21 @@ class SoulDuskRunGame extends FlameGame {
       return;
     }
     if (verticalMotion.jump()) {
-      final supportPx =
-          _baseSupportElevation * size.y * GameConfig.jumpHeightRatio;
       add(VfxBurst.jumpRipple(
-        Vector2(
-            player.position.x, playerPlaneY - supportPx + player.size.y * 0.34),
+        Vector2(player.position.x, playerPlaneY + player.size.y * 0.34),
       ));
     }
+  }
+
+  /// Launches Soul off a Radiant Golden Dawn Bounce-Cloud into a soaring
+  /// golden sky-arc!
+  void triggerCloudBounce(Vector2 cloudCenter) {
+    if (_ended || paused || !_runStarted) {
+      return;
+    }
+    verticalMotion.bounce();
+    add(VfxBurst.shieldShatter(cloudCenter));
+    hudTick.value += 1;
   }
 
   void slide() {
@@ -383,10 +357,8 @@ class SoulDuskRunGame extends FlameGame {
     }
     if (powerUps.consumeShieldOnHit()) {
       _stumbleTimer = 0;
-      // Subway Surfers Hoverboard crash-clear: clear nearby foreground hazards
-      // so Soul keeps surfing forward cleanly!
       for (final obs in children.whereType<Obstacle>().toList()) {
-        if (obs.frontDepth <= 0.28) {
+        if (!obs.isGoldenBounceCloud && obs.frontDepth <= 0.28) {
           obs.removeFromParent();
         }
       }
@@ -458,7 +430,7 @@ class SoulDuskRunGame extends FlameGame {
     _distanceSinceWave = 0;
     _distanceToNextWave = wave.distanceToNext;
 
-    const waveCoreDepth = 1.08;
+    const waveCoreDepth = 1.06;
     if (!powerUps.isSolarDashing) {
       for (final lane in wave.blockedLanes) {
         add(Obstacle(
@@ -470,7 +442,7 @@ class SoulDuskRunGame extends FlameGame {
       }
     }
 
-    // 1. Safe-lane / S-curve coin guide
+    // 1. Safe-lane / S-curve Sun Orb guide
     final orbLane = wave.orbLane;
     if (orbLane != null && wave.orbTrailCount > 0) {
       final slalom = wave.slalomLanes;
@@ -484,7 +456,7 @@ class SoulDuskRunGame extends FlameGame {
       }
     }
 
-    // 2. Parabolic jump-reward arc over low hurdles
+    // 2. Parabolic jump-reward arc over Crystal Spikes
     final arcLane = wave.jumpArcLane;
     if (arcLane != null && !powerUps.isSolarDashing) {
       const arcCount = 5;
@@ -493,12 +465,12 @@ class SoulDuskRunGame extends FlameGame {
         add(EnergyOrb(
           lane: arcLane,
           initialDepth: 1.00 + i * 0.04,
-          elevation: math.sin(t * math.pi) * 0.96,
+          elevation: math.sin(t * math.pi) * 0.94,
         ));
       }
     }
 
-    // 3. Slide-tunnel coins directly underneath overhead roll gates
+    // 3. Slide-tunnel Sun Orbs directly underneath Ancient Rune Vine Arches
     final slideLane = wave.slideTunnelLane;
     if (slideLane != null && !powerUps.isSolarDashing) {
       const tunnelOrbs = 4;
@@ -511,24 +483,16 @@ class SoulDuskRunGame extends FlameGame {
       }
     }
 
-    // 4. Ramp-climb + 3D Train Roof coin trail on `trainWithRamp`!
-    final roofLane = wave.roofCoinLane;
-    if (roofLane != null && !powerUps.isSolarDashing) {
-      add(EnergyOrb(
-        lane: roofLane,
-        initialDepth: waveCoreDepth - 0.045,
-        elevation: GameConfig.trainRoofElevation * 0.36,
-      ));
-      add(EnergyOrb(
-        lane: roofLane,
-        initialDepth: waveCoreDepth - 0.015,
-        elevation: GameConfig.trainRoofElevation * 0.78,
-      ));
-      for (var i = 0; i < 4; i++) {
+    // 4. Soaring Cathedral Sky-Arc of Sun Orbs ahead of a Golden Dawn Cloud!
+    final bounceLane = wave.roofCoinLane;
+    if (bounceLane != null && !powerUps.isSolarDashing) {
+      const skyArcCount = 5;
+      for (var i = 0; i < skyArcCount; i++) {
+        final u = (i + 0.5) / skyArcCount;
         add(EnergyOrb(
-          lane: roofLane,
-          initialDepth: waveCoreDepth + 0.03 + i * 0.065,
-          elevation: GameConfig.trainRoofElevation + 0.04,
+          lane: bounceLane,
+          initialDepth: waveCoreDepth + 0.05 + i * 0.065,
+          elevation: math.sin(u * math.pi) * 1.32,
         ));
       }
     }
@@ -592,8 +556,6 @@ class SoulDuskRunGame extends FlameGame {
     _distanceToNextWave = GameConfig.firstWaveDistance;
     _dashOrbTimer = 0;
     _cameraLane = GameConfig.initialLane.toDouble();
-    _baseSupportElevation = 0;
-    _fallVelocity = 0;
     _stumbleTimer = 0;
     _ended = false;
     _runStarted = false;

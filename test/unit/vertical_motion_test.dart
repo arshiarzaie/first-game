@@ -67,5 +67,21 @@ void main() {
       motion.update(0.28);
       expect(motion.jumpHeight, greaterThan(0.9));
     });
+
+    test('Golden Dawn Cloud bounce launches a soaring >1.0x sky-arc and resets',
+        () {
+      final motion = VerticalMotion(jumpDuration: 0.60);
+      motion.bounce(heightScale: 1.45, durationScale: 1.40);
+      expect(motion.isJumping, isTrue);
+
+      motion.update(0.42); // apex of 0.84s sky-arc
+      expect(motion.jumpHeight, closeTo(1.45, 1e-5));
+
+      motion.update(0.45); // lands back to normal jump scale
+      expect(motion.isJumping, isFalse);
+      motion.jump();
+      motion.update(0.30);
+      expect(motion.jumpHeight, closeTo(1.0, 1e-5));
+    });
   });
 }

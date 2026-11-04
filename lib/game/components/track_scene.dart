@@ -7,19 +7,22 @@ import 'package:flame/components.dart';
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
-/// S16 Cinematic `SOUL: DUSK RUN` Floating Ancient Stone Causeway & Fantasy
-/// Valley Vista (faithful 1-to-1 implementation of the Official Concept Board).
+/// S17 Living 6-Layer 3D `SOUL: DUSK RUN` Fantasy World (`TrackScene`).
 ///
-/// Renders:
-///  1. Full-bleed vertical pre-rendered fantasy world painting (`backdrop.png`)
-///     covering 100% of screen width and height (`0..W`, `0..H`) so both lush
-///     fantasy valley flanks remain completely visible with zero dark void;
-///  2. Sculpted 3D stone bridge side-apron depth bevels along the floating
-///     causeway edges;
-///  3. Smooth zero-flicker `12×48` `1/Z` perspective-foreshortened ancient
-///     stone causeway (`track_strip.png`);
-///  4. Pre-rendered 3D parapet lantern-pillars (`corridor_pillar.png`) with
-///     warm magical lantern light pools streaming along the bridge curbs.
+/// Transforms the static background into a deep, breathing, moving 3D world:
+///  1. Full-portrait atmospheric twilight/moonveil/emberfall horizon & misty
+///     chasm vista (`backdrop.png`);
+///  2. Soft diagonal God-rays (sunbeams/moonbeams) slanting from the horizon
+///     citadel across the valley;
+///  3. Outer-valley 3D Floating Fantasy Islands (`floating_island.png`)
+///     streaming forward in true `1/Z` depth on both left & right sides with
+///     gentle vertical levitation;
+///  4. Drifting atmospheric valley mist bands below the stone causeway;
+///  5. Smooth `12×48` `1/Z` perspective-foreshortened ancient stone bridge
+///     (`track_strip.png`) converging naturally toward the horizon citadel;
+///  6. Synchronized `1.0x` bridge-edge 3D Crystal/Flora Outcrops
+///     (`cliff_side.png`) alternating with 3D Parapet Lantern-Pillars
+///     (`corridor_pillar.png`), plus dreamy floating Firefly Light Motes!
 class TrackScene extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   TrackScene() : super(priority: -100);
@@ -94,10 +97,25 @@ class TrackScene extends PositionComponent
     } else {
       _renderPlaceholderBackdrop(canvas, w, h);
     }
+    _renderAtmosphericGodRays(canvas, w, h);
+    _renderStreamingFloatingIslands(canvas, w, h);
+    _renderDriftingValleyMist(canvas, w, h);
     _renderBridgeStoneApron(canvas, w, h);
     _renderTrack(canvas, w, h);
-    _renderParapetLanternPillars(canvas, w, h);
+    _renderBridgeCurbFloraAndLanterns(canvas, w, h);
+    _renderFloatingFireflyMotes(canvas, w, h);
     _renderSolarFlightStreaks(canvas, w, h);
+  }
+
+  Color get _worldLightColor {
+    switch (game.selectedWorld) {
+      case GameWorld.duskHollow:
+        return const Color(0xFFFFD494);
+      case GameWorld.moonveilMarsh:
+        return const Color(0xFF82F8E8);
+      case GameWorld.emberfallCanyon:
+        return const Color(0xFFFFC66C);
+    }
   }
 
   void _renderWorldBackdrop(
@@ -114,8 +132,6 @@ class TrackScene extends PositionComponent
         GameConfig.backdropHorizonFractionFor(game.selectedWorld);
     final minScaleForSky =
         (horizonY + 6) / math.max(1.0, imgH * horizonFrac);
-    // Cover 100% of screen width AND height so lush painted valley cliffs
-    // extend all the way to the bottom corners (`0%` black border!).
     final scale = math.max(math.max(w / imgW, h / imgH), minScaleForSky) * 1.05;
 
     final laneCenter = (GameConfig.laneCount - 1) / 2;
@@ -133,8 +149,139 @@ class TrackScene extends PositionComponent
     );
   }
 
-  /// Subtle 3D carved stone thickness under the outer edges of the floating
-  /// ancient bridge so it sits naturally inside the valley chasm.
+  /// Soft slanting sunbeams / moonbeams radiating from the horizon citadel.
+  void _renderAtmosphericGodRays(Canvas canvas, double w, double h) {
+    final lightCol = _worldLightColor;
+    final breath = 0.85 + 0.15 * math.sin(game.elapsedSeconds * 0.9);
+    const rays = [
+      (0.46, 0.06, 0.14, 0.22, 0.085),
+      (0.51, 0.08, 0.52, 0.28, 0.105),
+      (0.56, 0.06, 0.88, 0.21, 0.075),
+    ];
+    for (final r in rays) {
+      final topX = w * r.$1;
+      final topW = w * r.$2;
+      final botX = w * r.$3;
+      final botW = w * r.$4;
+      final alpha = r.$5 * breath;
+      final path = Path()
+        ..moveTo(topX - topW, h * 0.17)
+        ..lineTo(topX + topW, h * 0.17)
+        ..lineTo(botX + botW, h * 0.94)
+        ..lineTo(botX - botW, h * 0.94)
+        ..close();
+      canvas.drawPath(
+        path,
+        Paint()
+          ..shader = Gradient.linear(
+            Offset(topX, h * 0.17),
+            Offset(botX, h * 0.94),
+            [
+              lightCol.withValues(alpha: alpha),
+              lightCol.withValues(alpha: 0.0),
+            ],
+          ),
+      );
+    }
+  }
+
+  /// Streams pre-rendered 3D Floating Fantasy Islands (`floating_island.png`)
+  /// through the outer valley on both sides of the bridge in true `1/Z` depth!
+  void _renderStreamingFloatingIslands(Canvas canvas, double w, double h) {
+    final island = game.floatingIsland;
+    if (island == null || h <= game.horizonY) {
+      return;
+    }
+    const islandCount = 4;
+    const span = 1.36;
+    const step = span / islandCount;
+    // Outer valley islands glide at 0.58x world speed for rich 3D depth parallax!
+    final scroll = (game.travelled * 0.58) / GameConfig.trackLength;
+    final slotBase = scroll.floor();
+    final phase = scroll % step;
+    final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
+    final aspect = island.height / island.width;
+
+    for (var k = 0; k < islandCount; k++) {
+      final distH = phase + k * step;
+      final depth = 1.05 - distH;
+      if (depth > 1.02 || depth < -0.28) {
+        continue;
+      }
+      final slotId = slotBase * islandCount - k;
+      final sc = game.perspectiveFactor(depth);
+      final hw = halfPlayer * sc;
+      final cx = game.trackCenterXForDepth(depth);
+      final yb = game.yForDepth(depth);
+      final fade = ((1.04 - depth) / 0.22).clamp(0.0, 1.0).toDouble();
+
+      final iw = w * 0.44 * sc;
+      final ih = iw * aspect;
+      final bob =
+          math.sin(game.elapsedSeconds * 1.4 + slotId * 1.9) * h * 0.012 * sc;
+
+      // Alternate staggered heights & lateral offsets on left and right flanks!
+      for (final side in const [-1.0, 1.0]) {
+        final stagger = (side > 0) ? 0.14 : 0.0;
+        final dSide = depth - stagger;
+        if (dSide > 1.02 || dSide < -0.28) {
+          continue;
+        }
+        final scS = game.perspectiveFactor(dSide);
+        final hwS = halfPlayer * scS;
+        final cxS = game.trackCenterXForDepth(dSide);
+        final ybS = game.yForDepth(dSide);
+        final fadeS = ((1.04 - dSide) / 0.22).clamp(0.0, 1.0).toDouble() * fade;
+        final iwS = w * 0.44 * scS;
+        final ihS = iwS * aspect;
+
+        final xMult = 1.72 + 0.28 * ((slotId.abs() + (side > 0 ? 1 : 0)) % 2);
+        final yLift = h * (0.04 - 0.05 * (1.0 - dSide)) + bob;
+        final ix = cxS + side * hwS * xMult;
+        final iy = ybS + h * 0.11 * scS - yLift;
+
+        canvas.save();
+        canvas.translate(ix, iy - ihS / 2);
+        if (side > 0) {
+          canvas.scale(-1.0, 1.0);
+        }
+        canvas.drawImageRect(
+          island,
+          Rect.fromLTWH(
+              0, 0, island.width.toDouble(), island.height.toDouble()),
+          Rect.fromCenter(center: Offset.zero, width: iwS, height: ihS),
+          Paint()
+            ..color = Color.fromARGB((fadeS * 255).round(), 255, 255, 255)
+            ..filterQuality = FilterQuality.medium,
+        );
+        canvas.restore();
+      }
+    }
+  }
+
+  /// Gentle drifting valley mist below the floating stone bridge.
+  void _renderDriftingValleyMist(Canvas canvas, double w, double h) {
+    final horizonY = game.horizonY;
+    if (h <= horizonY) {
+      return;
+    }
+    final mistCol = _worldLightColor;
+    final t = game.elapsedSeconds * 0.22;
+    for (var i = 0; i < 3; i++) {
+      final yFrac = 0.36 + i * 0.22;
+      final driftX = math.sin(t + i * 2.1) * w * 0.12;
+      final cy = h * yFrac;
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(w * 0.5 + driftX, cy),
+          width: w * 1.35,
+          height: h * 0.15,
+        ),
+        Paint()..color = mistCol.withValues(alpha: 0.08),
+      );
+    }
+  }
+
   void _renderBridgeStoneApron(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
     if (h <= horizonY) {
@@ -176,68 +323,139 @@ class TrackScene extends PositionComponent
     }
   }
 
-  /// Streams pre-rendered 3D fantasy lantern-pillars (`corridor_pillar.png`)
-  /// synchronously with the bridge masonry along both stone parapets!
-  void _renderParapetLanternPillars(Canvas canvas, double w, double h) {
+  /// Alternates pre-rendered 3D Bridge-Edge Crystal/Flora Outcrops
+  /// (`cliff_side.png`) and 3D Parapet Lantern-Pillars (`corridor_pillar.png`)
+  /// moving at exact `1.0x` synchronized `1/Z` speed along both bridge curbs!
+  void _renderBridgeCurbFloraAndLanterns(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
     if (h <= horizonY) {
       return;
     }
     final pillar = game.corridorPillar;
+    final cliff = game.cliffSide;
     final auraColor = Color(GameConfig.lanternAuraArgbFor(game.selectedWorld));
 
-    const pairCount = 4;
-    const depthSpan = 1.16;
-    const step = depthSpan / pairCount;
-    final phase = (game.travelled / GameConfig.trackLength) % step;
+    const slotCount = 6;
+    const depthSpan = 1.20;
+    const step = depthSpan / slotCount;
+    final scroll = game.travelled / GameConfig.trackLength;
+    final slotBase = (scroll / step).floor();
+    final phase = scroll % step;
     final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
 
-    for (var k = 0; k < pairCount; k++) {
+    for (var k = 0; k < slotCount; k++) {
       final distH = phase + k * step;
       final depth = 1.0 - distH;
-      if (depth > 0.99 || depth < -0.16) {
+      if (depth > 0.99 || depth < -0.18) {
         continue;
       }
       final sc = game.perspectiveFactor(depth);
       final yb = game.yForDepth(depth);
       final cx = game.trackCenterXForDepth(depth);
       final hw = halfPlayer * sc;
-      final fade = (distH / 0.12).clamp(0.0, 1.0).toDouble();
-
-      final pw = w * 0.165 * sc;
-      final aspect = pillar != null ? pillar.height / pillar.width : 1.75;
-      final ph = pw * aspect;
+      final fade = (distH / 0.14).clamp(0.0, 1.0).toDouble();
+      final worldSlot = slotBase - k;
+      final isLanternSlot = worldSlot.isEven;
 
       for (final side in const [-1.0, 1.0]) {
-        final px = cx + side * hw * 0.95;
+        if (isLanternSlot || cliff == null) {
+          final px = cx + side * hw * 0.95;
+          final pw = w * 0.165 * sc;
+          final aspect = pillar != null ? pillar.height / pillar.width : 1.75;
+          final ph = pw * aspect;
 
-        // Soft warm magical lantern glow pool cast onto the stone curb!
-        canvas.drawOval(
-          Rect.fromCenter(
-            center: Offset(px - side * pw * 0.18, yb),
-            width: pw * 0.95,
-            height: pw * 0.24,
-          ),
-          Paint()..color = auraColor.withValues(alpha: 0.20 * fade),
-        );
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: Offset(px - side * pw * 0.18, yb),
+              width: pw * 0.95,
+              height: pw * 0.24,
+            ),
+            Paint()..color = auraColor.withValues(alpha: 0.22 * fade),
+          );
 
-        if (pillar != null) {
+          if (pillar != null) {
+            canvas.drawImageRect(
+              pillar,
+              Rect.fromLTWH(
+                  0, 0, pillar.width.toDouble(), pillar.height.toDouble()),
+              Rect.fromLTWH(px - pw / 2, yb + ph * 0.04 - ph, pw, ph),
+              Paint()
+                ..color = Color.fromARGB((fade * 255).round(), 255, 255, 255)
+                ..filterQuality = FilterQuality.medium,
+            );
+          }
+        } else {
+          final px = cx + side * hw * 1.02;
+          final cw = w * 0.245 * sc;
+          final ch = cw * (cliff.height / cliff.width);
+
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: Offset(px - side * cw * 0.12, yb + ch * 0.04),
+              width: cw * 0.72,
+              height: cw * 0.18,
+            ),
+            Paint()..color = auraColor.withValues(alpha: 0.16 * fade),
+          );
+
+          canvas.save();
+          canvas.translate(px, yb + ch * 0.06 - ch / 2);
+          if (side > 0) {
+            canvas.scale(-1.0, 1.0);
+          }
           canvas.drawImageRect(
-            pillar,
+            cliff,
             Rect.fromLTWH(
-                0, 0, pillar.width.toDouble(), pillar.height.toDouble()),
-            Rect.fromLTWH(px - pw / 2, yb + ph * 0.04 - ph, pw, ph),
+                0, 0, cliff.width.toDouble(), cliff.height.toDouble()),
+            Rect.fromCenter(center: Offset.zero, width: cw, height: ch),
             Paint()
               ..color = Color.fromARGB((fade * 255).round(), 255, 255, 255)
               ..filterQuality = FilterQuality.medium,
           );
-        } else {
-          canvas.drawRect(
-            Rect.fromLTWH(px - pw * 0.18, yb - ph * 0.8, pw * 0.36, ph * 0.8),
-            Paint()..color = auraColor.withValues(alpha: 0.75 * fade),
-          );
+          canvas.restore();
         }
       }
+    }
+  }
+
+  /// Dreamy floating golden/cyan firefly motes drifting gently through 3D space.
+  void _renderFloatingFireflyMotes(Canvas canvas, double w, double h) {
+    const count = GameConfig.ambientParticleCount;
+    if (count <= 0) {
+      return;
+    }
+    final glowCol = _worldLightColor;
+    final scroll = game.travelled / GameConfig.trackLength;
+    final t = game.elapsedSeconds;
+
+    for (var i = 0; i < count; i++) {
+      final seed = i * 0.6180339887;
+      final depth = 1.0 - ((scroll * 0.45 + seed) % 1.12);
+      if (depth > 0.98 || depth < -0.10) {
+        continue;
+      }
+      final sc = game.perspectiveFactor(depth);
+      final laneOffset = math.sin(seed * 19.3 + t * 0.55) * 1.65;
+      final mx = game.laneXForDepth(1.0 + laneOffset, depth);
+      final floatH = (0.15 + 0.55 * ((seed * 7.13) % 1.0)) +
+          math.sin(t * 1.3 + i) * 0.08;
+      final my = game.yForDepth(depth) - h * 0.22 * floatH * sc;
+      final pulse = 0.55 + 0.45 * math.sin(t * 2.4 + i * 1.7);
+      final fade =
+          ((1.0 - depth) / 0.20).clamp(0.0, 1.0).toDouble() * pulse;
+      final r = (3.4 * sc).clamp(1.2, 4.8).toDouble();
+
+      canvas.drawCircle(
+        Offset(mx, my),
+        r * 2.3,
+        Paint()..color = glowCol.withValues(alpha: 0.22 * fade),
+      );
+      canvas.drawCircle(
+        Offset(mx, my),
+        r * 0.75,
+        Paint()
+          ..color = const Color(0xFFFFFCE8).withValues(alpha: 0.78 * fade),
+      );
     }
   }
 
@@ -286,19 +504,6 @@ class TrackScene extends PositionComponent
     final halfTop = halfPlayer * pFar;
     final halfBottom = halfPlayer * pBottom;
 
-    final track = Path()
-      ..moveTo(cxTop - halfTop, horizonY)
-      ..lineTo(cxTop + halfTop, horizonY)
-      ..lineTo(cxBot + halfBottom, h)
-      ..lineTo(cxBot - halfBottom, h)
-      ..close();
-    canvas.drawPath(
-      track,
-      Paint()
-        ..color =
-            Color(GameConfig.trackFillArgbFor(game.selectedWorld) | 0xFF000000),
-    );
-
     final strip = game.trackStrip;
     if (strip != null && h > horizonY) {
       final trackBounds = Rect.fromLTWH(0, horizonY, w, h - horizonY);
@@ -312,7 +517,7 @@ class TrackScene extends PositionComponent
         halfPlayer: halfPlayer,
       );
 
-      final fadeEnd = horizonY + (h - horizonY) * 0.045;
+      final fadeEnd = horizonY + (h - horizonY) * 0.065;
       canvas.drawRect(
         Rect.fromLTWH(0, horizonY, w, fadeEnd - horizonY + 1),
         Paint()
@@ -327,6 +532,18 @@ class TrackScene extends PositionComponent
       return;
     }
 
+    final track = Path()
+      ..moveTo(cxTop - halfTop, horizonY)
+      ..lineTo(cxTop + halfTop, horizonY)
+      ..lineTo(cxBot + halfBottom, h)
+      ..lineTo(cxBot - halfBottom, h)
+      ..close();
+    canvas.drawPath(
+      track,
+      Paint()
+        ..color =
+            Color(GameConfig.trackFillArgbFor(game.selectedWorld) | 0xFF000000),
+    );
     final runePaint = Paint()
       ..color = Color(GameConfig.trackLaneArgbFor(game.selectedWorld))
       ..style = PaintingStyle.stroke
