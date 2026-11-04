@@ -210,13 +210,7 @@ class TrackScene extends PositionComponent
       }
       final slotId = slotBase * islandCount - k;
       final sc = game.perspectiveFactor(depth);
-      final hw = halfPlayer * sc;
-      final cx = game.trackCenterXForDepth(depth);
-      final yb = game.yForDepth(depth);
       final fade = ((1.04 - depth) / 0.22).clamp(0.0, 1.0).toDouble();
-
-      final iw = w * 0.44 * sc;
-      final ih = iw * aspect;
       final bob =
           math.sin(game.elapsedSeconds * 1.4 + slotId * 1.9) * h * 0.012 * sc;
 
