@@ -11,8 +11,5 @@ Got dependencies!
 Try `flutter pub outdated` for more information.
 Analyzing first-game...                                         
 
-warning • The value of the local variable 'hw' isn't used. Try removing the variable or using it • lib/game/components/track_scene.dart:213:13 • unused_local_variable
-warning • The value of the local variable 'cx' isn't used. Try removing the variable or using it • lib/game/components/track_scene.dart:214:13 • unused_local_variable
-warning • The value of the local variable 'yb' isn't used. Try removing the variable or using it • lib/game/components/track_scene.dart:215:13 • unused_local_variable
-warning • The value of the local variable 'ih' isn't used. Try removing the variable or using it • lib/game/components/track_scene.dart:219:13 • unused_local_variable
+warning • The operand can't be 'null', so the condition is always 'true'. Remove the condition • lib/game/components/track_scene.dart:1267:26 • unnecessary_null_comparison
 
