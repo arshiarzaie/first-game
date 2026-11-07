@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soul_dusk_run/game/config/game_config.dart';
 
-/// S4–S18 world-table contracts: every world resolves to distinct modular 3D
-/// assets, an in-bounds horizon anchor, Flame-relative keys, and a complete
-/// track palette.
+/// S4–S20 world-table & portal-cycle contracts: every world resolves to
+/// distinct modular 3D assets, an in-bounds horizon anchor, Flame-relative
+/// keys, a closed 3-world Crystal Portal cycle, and a complete track palette.
 void main() {
   test('worlds resolve distinct backdrop and modular 3D element assets', () {
     expect(GameConfig.backdropKeyFor(GameWorld.duskHollow),
@@ -27,6 +27,15 @@ void main() {
     );
   });
 
+  test('crystal portal biome cycle visits all three worlds in order', () {
+    expect(GameConfig.nextWorldAfter(GameWorld.duskHollow),
+        equals(GameWorld.moonveilMarsh));
+    expect(GameConfig.nextWorldAfter(GameWorld.moonveilMarsh),
+        equals(GameWorld.emberfallCanyon));
+    expect(GameConfig.nextWorldAfter(GameWorld.emberfallCanyon),
+        equals(GameWorld.duskHollow));
+  });
+
   test('painted-horizon anchors stay within the drawable image', () {
     for (final world in GameWorld.values) {
       final fraction = GameConfig.backdropHorizonFractionFor(world);
@@ -46,7 +55,8 @@ void main() {
     expect(keys.toSet().length, equals(GameWorld.values.length));
   });
 
-  test('modular 3D world and prop keys use Flame-relative paths', () {
+  test('modular 3D world, close-up Soul, and portal keys use Flame-relative paths',
+      () {
     final pillarKeys =
         GameWorld.values.map(GameConfig.corridorPillarKeyFor).toList();
     expect(pillarKeys.toSet().length, equals(GameWorld.values.length));
@@ -57,6 +67,10 @@ void main() {
       ...GameWorld.values.map(GameConfig.valleyFloorKeyFor),
       ...GameWorld.values.map(GameConfig.canyonWallKeyFor),
       ...GameWorld.values.map(GameConfig.skyCitadelKeyFor),
+      GameConfig.soulHoverOpenSpriteKey,
+      GameConfig.soulHoverBlinkSpriteKey,
+      GameConfig.soulJumpSpriteKey,
+      GameConfig.soulSlideSpriteKey,
       GameConfig.orbSpriteAsset,
       GameConfig.obstacleSpriteAsset,
       GameConfig.obstacleArchSpriteAsset,
@@ -64,6 +78,7 @@ void main() {
       GameConfig.goldenCloudSpriteAsset,
       GameConfig.viaductRuinSpriteAsset,
       GameConfig.skyCloudSpriteAsset,
+      GameConfig.crystalPortalSpriteAsset,
     ]) {
       expect(key.startsWith('assets/'), isFalse,
           reason: 'Flame images.load keys must not double-prefix assets/');
@@ -79,7 +94,6 @@ void main() {
         GameConfig.trackStripeArgbFor(world),
       ];
       for (final argb in values) {
-        // All palette colors are translucent-but-visible (alpha > 0x40).
         expect(argb >>> 24, greaterThan(0x40));
       }
     }

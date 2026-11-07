@@ -9,16 +9,20 @@ class GameConfig {
   static const int laneCount = 3;
   static const int initialLane = 1;
 
-  // ---- Speed / difficulty (S18: silky-smooth Soul Runner pacing) ----
-  static const double startSpeed = 280;
-  static const double maxSpeed = 540;
+  // ---- Speed / difficulty (S20: silky-smooth Soul Runner pacing) ----
+  static const double startSpeed = 285;
+  static const double maxSpeed = 545;
   static const double speedRampPerSecond = 5.5;
 
   /// Extra oncoming drift speed of Tempest Dark Storm Clouds.
   static const double movingTrainExtraSpeed = 95;
 
-  // ---- World geometry ----
+  // ---- World geometry & Crystal Portal biome gateways ----
   static const double trackLength = 960;
+
+  /// Distance between in-run 3D Crystal Portal Gateways (`06-22-22.png` ->
+  /// `06-22-29.png`) that seamlessly transition into the next biome!
+  static const double portalIntervalDistance = 7600;
 
   /// Normalized clearance threshold to soar cleanly above Dark Storm Clouds.
   static const double stormCloudClearElevation = 0.88;
@@ -41,47 +45,49 @@ class GameConfig {
   static const double scorePerWorldUnit = 0.025;
   static const int orbScore = 10;
 
-  // ---- S18/S19 Low Over-the-Shoulder 3D Chase Camera & Sky-Flight Intro ----
-  static const double farDepthRatio = 3.60;
-  static const double horizonRatio = 0.38;
-  static const double playerPlaneRatio = 0.75;
+  // ---- S20 Closer, Lower Over-the-Shoulder 3D Chase Camera & Hero Dive ----
+  static const double farDepthRatio = 4.15;
+  static const double horizonRatio = 0.35;
+  static const double playerPlaneRatio = 0.77;
   static const double farScale = 1.0 / farDepthRatio;
 
-  /// Extra sky framing on the Living Main Screen before camera swoops down.
-  static const double titleHorizonLiftRatio = 0.08;
+  /// Sky-high camera framing on the Living Main Screen (`horizonY = 0.71 * h`)
+  /// showcasing close-up front-facing Soul against Sky Citadels & Sunset/Moon!
+  static const double titleHorizonLiftRatio = 0.36;
 
   /// Soul's living mid-air hover altitude on the Main Title Screen.
-  static const double titleHoverElevation = 1.44;
+  static const double titleHoverElevation = 1.52;
 
-  /// Peak soaring altitude reached right after clicking START before swooping
-  /// down onto the ancient stone causeway.
-  static const double introFlightPeakElevation = 1.84;
+  /// Peak soaring altitude before Soul's 180° spin & golden comet dive!
+  static const double introFlightPeakElevation = 1.86;
 
-  /// Duration of Soul's animated sky-flight -> bridge touchdown sequence.
-  static const double introFlightDurationSeconds = 1.24;
+  /// Duration of Soul's 4-phase eye-close -> 180° spin -> golden comet dive ->
+  /// low stone-slab glide -> cushioned touchdown sequence (`1.32s`).
+  static const double introFlightDurationSeconds = 1.32;
 
   /// Subtle sculpted 3D crown/arch of the ancient stone causeway.
-  static const double bridgeArchRatio = 0.007;
+  static const double bridgeArchRatio = 0.008;
 
   /// 3D elevation drop of the valley/water plane beneath the stone bridge.
-  static const double valleyDropRatio = 0.085;
+  static const double valleyDropRatio = 0.092;
 
   /// Gentle scenic S-curve amplitude toward the distant horizon.
   static const double roadCurveRatio = 0.095;
 
-  /// Half-width of the floating ancient stone bridge at Soul's plane.
-  static const double trackBottomHalfWidthRatio = 0.355;
+  /// Half-width of the chiseled stone causeway at Soul's plane (`87%` width at
+  /// Soul's feet, widening naturally to fill `100%` of the bottom edge!).
+  static const double trackBottomHalfWidthRatio = 0.435;
   static const double trackTopHalfWidthRatio =
       trackBottomHalfWidthRatio / farDepthRatio;
 
-  static const double trackTileRepeats = 2.05;
-  static const double valleyTileRepeats = 2.40;
-  static const double cameraFollowRatio = 0.30;
+  static const double trackTileRepeats = 2.15;
+  static const double valleyTileRepeats = 2.45;
+  static const double cameraFollowRatio = 0.44;
   static const double laneSpreadRatio = 0.58;
 
-  // ---- Entity sizing & forgiving side-bump stumble ----
-  static const double playerWidthRatio = 0.255;
-  static const double entityWidthRatio = 0.22;
+  // ---- Closer Hero & Entity Sizing + Forgiving Side-Bump Stumble ----
+  static const double playerWidthRatio = 0.315;
+  static const double entityWidthRatio = 0.255;
   static const double hitboxFactor = 0.72;
   static const double collisionLaneThreshold = 0.27;
   static const double stumbleLaneThreshold = 0.43;
@@ -105,6 +111,8 @@ class GameConfig {
 
   // ---- Presentation assets ----
   static const String soulSpriteAsset = 'assets/images/soul/soul_hero.png';
+  static const String soulHoverOpenSpriteKey = 'soul/hover_open.png';
+  static const String soulHoverBlinkSpriteKey = 'soul/hover_blink.png';
   static const String soulJumpSpriteKey = 'soul/jump.png';
   static const String soulSlideSpriteKey = 'soul/slide.png';
 
@@ -116,6 +124,7 @@ class GameConfig {
   static const String goldenCloudSpriteAsset = 'props/golden_cloud.png';
   static const String viaductRuinSpriteAsset = 'props/viaduct_ruin.png';
   static const String skyCloudSpriteAsset = 'props/sky_cloud.png';
+  static const String crystalPortalSpriteAsset = 'props/crystal_portal.png';
 
   static const String duskHollowPillarKey =
       'worlds/dusk_hollow/corridor_pillar.png';
@@ -123,6 +132,17 @@ class GameConfig {
       'worlds/moonveil_marsh/corridor_pillar.png';
   static const String emberfallCanyonPillarKey =
       'worlds/emberfall_canyon/corridor_pillar.png';
+
+  static GameWorld nextWorldAfter(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return GameWorld.moonveilMarsh;
+      case GameWorld.moonveilMarsh:
+        return GameWorld.emberfallCanyon;
+      case GameWorld.emberfallCanyon:
+        return GameWorld.duskHollow;
+    }
+  }
 
   static String corridorPillarKeyFor(GameWorld world) {
     switch (world) {
@@ -304,17 +324,17 @@ class GameConfig {
   }
 
   static const double backdropDriftAmplitude = 0.0;
-  static const double cameraSwayPerLane = 12;
-  static const int ambientParticleCount = 20;
+  static const double cameraSwayPerLane = 18;
+  static const int ambientParticleCount = 24;
   static const double playerBobRatio = 0.024;
-  static const double playerLeanAngle = 0.15;
+  static const double playerLeanAngle = 0.16;
 
   // ---- Soul run-cycle animation ----
   static const String runFramesPrefix = 'soul/run/frame_';
   static const int runFrameCount = 8;
   static const double runCycleFps = 13.5;
   static const int runIdleFrame = 1;
-  static const double runCycleFitBoost = 1.14;
+  static const double runCycleFitBoost = 1.16;
 }
 
 enum GameWorld { duskHollow, moonveilMarsh, emberfallCanyon }

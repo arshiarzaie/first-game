@@ -9,13 +9,13 @@ import '../overlays/pause_overlay.dart';
 import 'settings_screen.dart';
 import 'world_select_screen.dart';
 
-/// Unified Living 3D Main Screen & Gameplay Host (`0.19.0+19`):
-///  * **Main Screen (`isTitleHovering`)**: renders the live 9-layer 3D world
-///    with Soul hovering alive in the sky, paired with `SOUL: DUSK RUN`,
-///    `WORLDS`, `Settings`, and the glowing `START` button;
-///  * **On `START` click**: fades out the title UI while Soul arcs upward,
-///    flies down onto the stone bridge, and transitions seamlessly into full
-///    ground running with the gameplay HUD!
+/// Unified Living 3D Main Screen & Gameplay Host (`0.20.0+20`):
+///  * **Main Screen (`isTitleHovering`)**: close-up front-facing Soul floats
+///    alive in the sky (smiling, blinking, trailing golden ribbons); tapping
+///    **directly on Soul** OR clicking **`START`** launches his 180° spin &
+///    golden comet dive down onto the chiseled stone causeway!
+///  * **In-Run Gameplay**: close over-the-shoulder chase camera behind Soul
+///    with live 3D Crystal Portal biome transitions (`06-22-22` -> `06-22-29`)!
 class GameScreen extends StatefulWidget {
   const GameScreen({
     super.key,
@@ -129,6 +129,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final screenWidth = constraints.maxWidth;
+          final screenHeight = constraints.maxHeight;
           return Stack(
             fit: StackFit.expand,
             children: [
@@ -214,7 +215,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   return Stack(
                     fit: StackFit.expand,
                     children: [
-                      // 1. Living 3D Main Screen Overlay (fades out on START!)
+                      // 1. Living Close-Up Main Screen Overlay!
                       IgnorePointer(
                         ignoring: !inTitle,
                         child: AnimatedOpacity(
@@ -222,6 +223,8 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                           duration: const Duration(milliseconds: 280),
                           curve: Curves.easeOutCubic,
                           child: _LivingTitleOverlay(
+                            screenWidth: screenWidth,
+                            screenHeight: screenHeight,
                             worldLabel: _worldDisplayName(_activeWorld),
                             onStart: _game.startRun,
                             onOpenWorlds: _openWorldSelect,
@@ -230,7 +233,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                         ),
                       ),
 
-                      // 2. Gameplay HUD (fades in smoothly as Soul flies in!)
+                      // 2. Gameplay HUD + Live Crystal Portal Biome Banner!
                       IgnorePointer(
                         ignoring: !inGameplay,
                         child: AnimatedOpacity(
@@ -248,6 +251,40 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                                   child: _TopHudBar(game: _game),
                                 ),
                               ),
+                              if (_game.showPortalArrivalBanner)
+                                Positioned(
+                                  top: topPad + 64,
+                                  left: 0,
+                                  right: 0,
+                                  child: IgnorePointer(
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xBB18243E),
+                                          borderRadius:
+                                              BorderRadius.circular(18),
+                                          border: Border.all(
+                                            color: const Color(0xAA7AF6FF),
+                                            width: 1.3,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _worldDisplayName(_game.currentWorld),
+                                          style: const TextStyle(
+                                            color: Color(0xFFE6FFFF),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 2.6,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               if (_game.isGroundRunning)
                                 Positioned(
                                   left: 16,
@@ -293,15 +330,21 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   }
 }
 
-/// Overlay shown over the live 3D world while Soul hovers alive in the sky.
+/// Overlay shown over the live 3D world while close-up Soul hovers alive in
+/// the sky (`06-22-47.png`). Both tapping directly on Soul AND tapping `START`
+/// launch Soul's 180° turn & golden comet dive!
 class _LivingTitleOverlay extends StatelessWidget {
   const _LivingTitleOverlay({
+    required this.screenWidth,
+    required this.screenHeight,
     required this.worldLabel,
     required this.onStart,
     required this.onOpenWorlds,
     required this.onOpenSettings,
   });
 
+  final double screenWidth;
+  final double screenHeight;
   final String worldLabel;
   final VoidCallback onStart;
   final VoidCallback onOpenWorlds;
@@ -314,8 +357,6 @@ class _LivingTitleOverlay extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Subtle top & bottom readability vignettes (leaving center 100% clear
-        // so Living Hovering Soul shines unobstructed!).
         const Align(
           alignment: Alignment.topCenter,
           child: IgnorePointer(
@@ -327,7 +368,7 @@ class _LivingTitleOverlay extends StatelessWidget {
                   colors: [Color(0x88100A22), Color(0x00100A22)],
                 ),
               ),
-              child: SizedBox(width: double.infinity, height: 190),
+              child: SizedBox(width: double.infinity, height: 185),
             ),
           ),
         ),
@@ -342,15 +383,32 @@ class _LivingTitleOverlay extends StatelessWidget {
                   colors: [Color(0x00100A22), Color(0xBF100A22)],
                 ),
               ),
-              child: SizedBox(width: double.infinity, height: 210),
+              child: SizedBox(width: double.infinity, height: 205),
             ),
           ),
         ),
+
+        // Direct Hero Tap Zone over Close-Up Floating Soul (`06-22-47.png`)!
+        // Uses `onTap` so drags do not misfire while tapping Soul immediately
+        // launches his 180° turn & golden comet dive!
+        Positioned(
+          left: screenWidth * 0.03,
+          top: screenHeight * 0.22,
+          width: screenWidth * 0.65,
+          height: screenHeight * 0.44,
+          child: GestureDetector(
+            key: const Key('soulHeroTapTarget'),
+            behavior: HitTestBehavior.translucent,
+            onTap: onStart,
+          ),
+        ),
+
         SafeArea(
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Row(
                   children: [
                     Material(
@@ -474,7 +532,6 @@ class _LivingTitleOverlay extends StatelessWidget {
                 ),
               ),
 
-              // Open center viewport showcasing Living Hovering Soul!
               const Spacer(),
 
               Container(
@@ -509,7 +566,7 @@ class _LivingTitleOverlay extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               Text(
-                'Tap START to soar into the dusk',
+                'Tap Soul or START to soar into the dusk',
                 style: textTheme.bodySmall?.copyWith(
                   color: const Color(0xCCF6E7C8),
                   letterSpacing: 1.0,
@@ -739,8 +796,6 @@ class _ActiveTimerBadge extends StatelessWidget {
   }
 }
 
-/// Circular golden emblem button at bottom-left matching `حین بازی` on the
-/// Official Concept Board!
 class _SunShieldOrbButton extends StatelessWidget {
   const _SunShieldOrbButton({required this.game});
 

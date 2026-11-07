@@ -7,29 +7,26 @@ import 'package:flame/components.dart';
 import '../config/game_config.dart';
 import '../soul_dusk_run_game.dart';
 
-/// S18 100% Modular 9-Layer 3D `SOUL: DUSK RUN` World Engine (`TrackScene`).
+/// S20 100% Modular 9-Layer 3D `SOUL: DUSK RUN` World Engine (`TrackScene`).
 ///
-/// Every square inch of the viewport is constructed out of independent,
-/// depth-projected 3D surfaces and modular 3D world elements (ZERO static
-/// painted scenery):
-///  1. Pure atmospheric sky dome + twinkling starfield + radial Celestial
-///     Moon / Sunset Sun element;
-///  2. Multi-layer volumetric 3D Sky Cloud banks (`sky_cloud.png`) drifting
-///     across the sky at independent parallax speeds;
-///  3. Parallax 3D Pine-Mountain horizon silhouettes + streaming `1/Z`
-///     High-Altitude 3D Sky Citadel Castle Islands (`sky_citadel.png`);
-///  4. Full-width `16×32` `1/Z` perspective-projected 3D Water / Valley Floor
-///     Mesh (`valley_floor.png`) flowing beneath the elevated bridge;
-///  5. Multi-corridor `1/Z` 3D Valley Scenery: towering Outer Canyon Cliffs &
-///     Ancient Forest Banks (`canyon_wall.png`), Mid-Valley Floating/Marsh
-///     Islands (`floating_island.png`), and Transverse Ancient Stone Viaduct
-///     Arch Ruins (`viaduct_ruin.png`) with water reflections & distance fog;
-///  6. True 3D Extruded Stone Causeway: chiseled outer cliff wall, `12×48`
-///     `1/Z` Flagstone Slab Deck (`track_strip.png`), 3D raised block-jointed
-///     stone curbs, glowing cyan/gold rune seams, and distant horizon halo;
-///  7. Curb-mounted 3D Lantern Pillars (`corridor_pillar.png`) & 3D Crystal
-///     Rune Shrines (`cliff_side.png`) casting diagonal shadows & light pools;
-///  8. Depth-projected bioluminescent Firefly Spores & Solar Flight streaks!
+/// Upgraded for the closer, lower over-the-shoulder chase camera (`0.20.0+20`):
+///  1. Atmospheric sky dome + twinkling starfield + upper-right Sunset Sun /
+///     giant Aquamarine Full Moon;
+///  2. Multi-layer volumetric 3D Sky Cloud banks (`sky_cloud.png`);
+///  3. Spire mountain ridges + 4-slot `1/Z` 3D Sky Citadel Castle Islands
+///     (`sky_citadel.png`);
+///  4. Full-width `16×32` `1/Z` 3D Water / Valley Floor Mesh (`valley_floor.png`);
+///  5. Rich 10-slot Asymmetric 3D Cliffside & Chasm Corridors: close terraced
+///     left cliffs (`canyon_wall.png`) with luminous turquoise cliff-rivers &
+///     purple/orange fantasy flora + open sheer right chasm with multi-altitude
+///     floating islands (`floating_island.png`) & viaducts (`viaduct_ruin.png`)
+///     (plus lush dual-bank enchanted night forest in Moonveil Marsh!);
+///  6. Wide `12×48` 3D Flagstone Causeway (`track_strip.png`) with specular sky
+///     sheen, chiseled left stone parapet + glowing cyan crystal rune seams,
+///     and sheer right cliff-drop stone coping;
+///  7. Curb-mounted 3D Crystal Rune Shrines (`cliff_side.png`) & Lanterns
+///     (`corridor_pillar.png`) casting diagonal sunset shadows across the slabs;
+///  8. Bioluminescent Firefly Spores, Main-Screen DoF veil & Portal Shimmer!
 class TrackScene extends PositionComponent
     with HasGameReference<SoulDuskRunGame> {
   TrackScene() : super(priority: -100);
@@ -99,8 +96,10 @@ class TrackScene extends PositionComponent
   @override
   bool containsLocalPoint(Vector2 point) => false;
 
+  GameWorld get _world => game.currentWorld;
+
   Color get _worldLightColor {
-    switch (game.selectedWorld) {
+    switch (_world) {
       case GameWorld.duskHollow:
         return const Color(0xFFFFD494);
       case GameWorld.moonveilMarsh:
@@ -111,7 +110,7 @@ class TrackScene extends PositionComponent
   }
 
   Color get _horizonFogColor {
-    switch (game.selectedWorld) {
+    switch (_world) {
       case GameWorld.duskHollow:
         return const Color(0xFFD68E9E);
       case GameWorld.moonveilMarsh:
@@ -124,7 +123,7 @@ class TrackScene extends PositionComponent
   double get _skyParallaxX {
     final laneCenter = (GameConfig.laneCount - 1) / 2;
     return (game.cameraLane - laneCenter) * -GameConfig.cameraSwayPerLane +
-        game.roadCurveFactor * size.x * 0.055;
+        game.roadCurveFactor * size.x * 0.06;
   }
 
   @override
@@ -145,6 +144,7 @@ class TrackScene extends PositionComponent
     _render3DExtrudedStoneCauseway(canvas, w, h);
     _renderBridgeCurbPropsAndShadows(canvas, w, h);
     _renderFloatingFireflyMotes(canvas, h);
+    _renderTitleDepthOfFieldAndPortalVeil(canvas, w, h);
     _renderSolarFlightStreaks(canvas, w, h);
   }
 
@@ -158,8 +158,7 @@ class TrackScene extends PositionComponent
     if (backdrop != null) {
       final imgW = backdrop.width.toDouble();
       final imgH = backdrop.height.toDouble();
-      final horizonFrac =
-          GameConfig.backdropHorizonFractionFor(game.selectedWorld);
+      final horizonFrac = GameConfig.backdropHorizonFractionFor(_world);
       final minScale = (horizonY + 8) / math.max(1.0, imgH * horizonFrac);
       final scale = math.max(math.max(w / imgW, h / imgH), minScale) * 1.06;
       final dx = (w - imgW * scale) / 2 + _skyParallaxX * 0.45;
@@ -176,18 +175,17 @@ class TrackScene extends PositionComponent
       _renderPlaceholderBackdrop(canvas, w, h);
     }
 
-    // Subtle twinkling celestial stars in the upper zenith
-    if (game.selectedWorld != GameWorld.emberfallCanyon) {
-      final starAlphaBase =
-          game.selectedWorld == GameWorld.moonveilMarsh ? 0.58 : 0.34;
-      for (var i = 0; i < 18; i++) {
+    // Twinkling celestial stars in the upper twilight/night sky
+    if (_world != GameWorld.emberfallCanyon) {
+      final starAlphaBase = _world == GameWorld.moonveilMarsh ? 0.62 : 0.36;
+      for (var i = 0; i < 22; i++) {
         final sx = ((i * 0.371 + 0.11) % 1.0) * w + _skyParallaxX * 0.25;
         final sy = ((i * 0.619 + 0.04) % 1.0) * horizonY * 0.68;
         final twinkle =
             0.45 + 0.55 * math.sin(game.ambientSeconds * 2.1 + i * 1.7);
         canvas.drawCircle(
           Offset(sx % w, sy),
-          (i % 3 == 0) ? 1.5 : 1.0,
+          (i % 3 == 0) ? 1.6 : 1.0,
           Paint()
             ..color = const Color(0xFFFFFBE8)
                 .withValues(alpha: starAlphaBase * twinkle),
@@ -195,34 +193,36 @@ class TrackScene extends PositionComponent
       }
     }
 
-    // Volumetric 3D Celestial Body (Giant Cyan Moon / Sunset Sun / Solar Corona)
+    // Volumetric 3D Celestial Body (Upper-right Sunset Sun `06-22-47` / Giant
+    // Aquamarine Moon `06-22-29` / Blazing Solar Corona!)
+    final titleBlend = game.introCameraBlend;
     final double cx;
     final double cy;
     final double radius;
     final Color coreCol;
     final Color haloCol;
-    switch (game.selectedWorld) {
+    switch (_world) {
       case GameWorld.moonveilMarsh:
-        cx = w * 0.56 + _skyParallaxX * 0.55;
-        cy = horizonY * 0.33;
-        radius = w * 0.135;
-        coreCol = const Color(0xFFD6FFF9);
-        haloCol = const Color(0xFF56F0E4);
+        cx = w * (0.56 + 0.14 * titleBlend) + _skyParallaxX * 0.55;
+        cy = horizonY * (0.34 - 0.08 * titleBlend);
+        radius = w * 0.145;
+        coreCol = const Color(0xFFD8FFFA);
+        haloCol = const Color(0xFF4EF2E6);
       case GameWorld.duskHollow:
-        cx = w * 0.54 + _skyParallaxX * 0.55;
-        cy = horizonY * 0.64;
-        radius = w * 0.056;
+        cx = w * (0.60 + 0.16 * titleBlend) + _skyParallaxX * 0.55;
+        cy = horizonY * (0.56 - 0.28 * titleBlend);
+        radius = w * (0.056 + 0.046 * titleBlend);
         coreCol = const Color(0xFFFFF4D2);
-        haloCol = const Color(0xFFFFA874);
+        haloCol = const Color(0xFFFF9868);
       case GameWorld.emberfallCanyon:
-        cx = w * 0.52 + _skyParallaxX * 0.55;
-        cy = horizonY * 0.58;
-        radius = w * 0.076;
+        cx = w * (0.56 + 0.16 * titleBlend) + _skyParallaxX * 0.55;
+        cy = horizonY * (0.54 - 0.26 * titleBlend);
+        radius = w * (0.078 + 0.036 * titleBlend);
         coreCol = const Color(0xFFFFF6CE);
-        haloCol = const Color(0xFFFF9E44);
+        haloCol = const Color(0xFFFF9A42);
     }
 
-    final bloomR = radius * 3.1;
+    final bloomR = radius * 3.2;
     canvas.drawCircle(
       Offset(cx, cy),
       bloomR,
@@ -231,8 +231,8 @@ class TrackScene extends PositionComponent
           Offset(cx, cy),
           bloomR,
           [
-            haloCol.withValues(alpha: 0.42),
-            haloCol.withValues(alpha: 0.14),
+            haloCol.withValues(alpha: 0.46),
+            haloCol.withValues(alpha: 0.16),
             haloCol.withValues(alpha: 0.0),
           ],
           const [0.0, 0.48, 1.0],
@@ -249,9 +249,8 @@ class TrackScene extends PositionComponent
         ),
     );
 
-    // Subtle lunar maria craters on Moonveil Marsh's giant full moon!
-    if (game.selectedWorld == GameWorld.moonveilMarsh) {
-      final craterPaint = Paint()..color = const Color(0x28268E8E);
+    if (_world == GameWorld.moonveilMarsh) {
+      final craterPaint = Paint()..color = const Color(0x28248A8A);
       canvas.drawCircle(
           Offset(cx - radius * 0.28, cy - radius * 0.12), radius * 0.24, craterPaint);
       canvas.drawCircle(
@@ -274,20 +273,19 @@ class TrackScene extends PositionComponent
     final aspect = cloud.height / cloud.width;
     final Color tintCol;
     final double tintAmt;
-    switch (game.selectedWorld) {
+    switch (_world) {
       case GameWorld.moonveilMarsh:
-        tintCol = const Color(0xFF287E92);
-        tintAmt = 0.56;
+        tintCol = const Color(0xFF22768A);
+        tintAmt = 0.58;
       case GameWorld.duskHollow:
-        tintCol = const Color(0xFFC87898);
+        tintCol = const Color(0xFFC87498);
         tintAmt = 0.48;
       case GameWorld.emberfallCanyon:
-        tintCol = const Color(0xFFE49454);
+        tintCol = const Color(0xFFE49252);
         tintAmt = 0.50;
     }
 
     const specs = [
-      // (baseX, yFracOfHorizon, widthFrac, driftSpeed, alpha, flip)
       (0.16, 0.72, 0.68, 0.011, 0.50, false),
       (0.76, 0.66, 0.72, 0.014, 0.54, true),
       (0.46, 0.84, 0.78, 0.008, 0.42, false),
@@ -330,7 +328,7 @@ class TrackScene extends PositionComponent
   }
 
   // ---------------------------------------------------------------
-  // 3. Distant 3D Mountain Ridges & Streaming 3D Sky Citadel Islands
+  // 3. Spire Mountain Ridges & 4-Slot 3D Sky Citadel Castle Islands
   // ---------------------------------------------------------------
 
   void _renderMountainRidgesAndSkyCitadels(Canvas canvas, double w, double h) {
@@ -339,37 +337,37 @@ class TrackScene extends PositionComponent
       return;
     }
 
-    // Distant parallax mountain silhouette ridge framing the valley gap
     final Color ridgeFar;
     final Color ridgeNear;
-    switch (game.selectedWorld) {
+    switch (_world) {
       case GameWorld.moonveilMarsh:
-        ridgeFar = const Color(0x881A5868);
-        ridgeNear = const Color(0xAA144452);
+        ridgeFar = const Color(0x88165060);
+        ridgeNear = const Color(0xB4103C4A);
       case GameWorld.duskHollow:
-        ridgeFar = const Color(0x886A447E);
-        ridgeNear = const Color(0xAA4E3268);
+        ridgeFar = const Color(0x886A427E);
+        ridgeNear = const Color(0xB44C2E66);
       case GameWorld.emberfallCanyon:
-        ridgeFar = const Color(0x88945038);
-        ridgeNear = const Color(0xAA723A28);
+        ridgeFar = const Color(0x88944E36);
+        ridgeNear = const Color(0xB4703624);
     }
 
+    // Dramatic fantasy spire peaks (`06-22-47.png` & `06-22-12.png`)!
     final bridgeHorizonX = game.trackCenterXForDepth(1.0);
     for (var layer = 0; layer < 2; layer++) {
       final path = Path()..moveTo(-10, horizonY + 8);
-      final amp = horizonY * (layer == 0 ? 0.14 : 0.095);
+      final amp = horizonY * (layer == 0 ? 0.22 : 0.14);
       final phaseShift =
           _skyParallaxX * (layer == 0 ? 0.8 : 1.3) / math.max(1.0, w);
-      const segs = 28;
+      const segs = 34;
       for (var i = 0; i <= segs; i++) {
         final fx = i / segs;
         final x = -10 + (w + 20) * fx;
         final u = fx + phaseShift;
-        final wave = (math.sin(u * 8.5 + layer * 2.2) * 0.5 + 0.5) * 0.72 +
-            (math.sin(u * 21.0 + layer) * 0.5 + 0.5) * 0.28;
-        final distToGap = ((x - bridgeHorizonX) / (w * 0.22));
-        final valleyNotch = 1.0 - 0.72 * math.exp(-distToGap * distToGap);
-        path.lineTo(x, horizonY + 2 - amp * wave * valleyNotch);
+        final rawWave = (math.sin(u * 9.5 + layer * 2.3) * 0.5 + 0.5) * 0.65 +
+            math.pow(math.sin(u * 23.0 + layer * 1.4).abs(), 1.6) * 0.35;
+        final distToGap = (x - bridgeHorizonX) / (w * 0.20);
+        final valleyNotch = 1.0 - 0.74 * math.exp(-distToGap * distToGap);
+        path.lineTo(x, horizonY + 2 - amp * rawWave * valleyNotch);
       }
       path
         ..lineTo(w + 10, horizonY + 8)
@@ -377,7 +375,8 @@ class TrackScene extends PositionComponent
       canvas.drawPath(path, Paint()..color = layer == 0 ? ridgeFar : ridgeNear);
     }
 
-    // High-altitude 3D Sky Citadels (`sky_citadel.png`) streaming in 1/Z depth!
+    // High-altitude 3D Sky Citadels (`sky_citadel.png`) — framed prominently in
+    // upper-center-right on Main Screen (`06-22-47`) AND streaming in 1/Z depth!
     final citadel = game.skyCitadel;
     if (citadel == null) {
       return;
@@ -386,32 +385,45 @@ class TrackScene extends PositionComponent
     final src =
         Rect.fromLTWH(0, 0, citadel.width.toDouble(), citadel.height.toDouble());
     final fogCol = _horizonFogColor;
+    final titleBlend = game.introCameraBlend;
 
-    const count = 3;
-    const span = 1.32;
+    const count = 4;
+    const span = 1.36;
     const step = span / count;
-    final scroll = (game.travelled * 0.26) / GameConfig.trackLength;
+    final scroll = (game.travelled * 0.28) / GameConfig.trackLength;
     final slotBase = (scroll / step).floor();
     final phase = scroll % step;
 
     for (var k = 0; k < count; k++) {
-      final depth = 1.04 - (phase + k * step);
-      if (depth > 1.02 || depth < -0.22) {
+      final depth = 1.02 - (phase + k * step);
+      if (depth > 1.02 || depth < -0.24) {
         continue;
       }
       final slotId = slotBase - k;
-      final side = slotId.isEven ? -1.0 : 1.0;
+      // Bias Sky Citadels toward the panoramic upper-right chasm (`06-22-12`)!
+      final side = (slotId.abs() % 3 == 1) ? -1.0 : 1.0;
       final sc = game.perspectiveFactor(depth);
-      final fade = ((1.03 - depth) / 0.18).clamp(0.0, 1.0).toDouble();
-      final fogAmt = (depth * 0.46).clamp(0.08, 0.52).toDouble();
+      final fade = ((1.03 - depth) / 0.16).clamp(0.0, 1.0).toDouble();
+      final fogAmt = (depth * 0.44).clamp(0.06, 0.50).toDouble();
       final bob =
-          math.sin(game.ambientSeconds * 1.1 + slotId * 2.1) * h * 0.008 * sc;
+          math.sin(game.ambientSeconds * 1.15 + slotId * 2.1) * h * 0.008 * sc;
 
-      final cw = w * 0.62 * sc;
+      final cw = w * (0.76 + 0.12 * titleBlend) * sc;
       final ch = cw * aspect;
-      final cx = game.trackCenterXForDepth(depth.clamp(0.0, 1.0).toDouble()) +
-          side * w * (0.24 + 0.16 * sc);
-      final cy = horizonY - h * (0.04 + 0.14 * sc) + bob;
+      final chaseCx =
+          game.trackCenterXForDepth(depth.clamp(0.0, 1.0).toDouble()) +
+              side * w * (0.20 + 0.16 * sc);
+      // On Main Screen (`titleBlend == 1`), anchor primary citadel right in
+      // upper-center-right (`06-22-47.png` castle silhouette)!
+      final titleSlotX = (k == 1)
+          ? w * 0.62
+          : (k == 2 ? w * 0.88 : (side < 0 ? w * 0.16 : w * 0.74));
+      final titleSlotY = (k == 1) ? horizonY * 0.42 : horizonY * 0.54;
+      final chaseCy = horizonY - h * (0.05 + 0.16 * sc) + bob;
+
+      final cx = chaseCx * (1.0 - titleBlend) +
+          (titleSlotX + _skyParallaxX * 0.5) * titleBlend;
+      final cy = chaseCy * (1.0 - titleBlend) + (titleSlotY + bob) * titleBlend;
 
       canvas.save();
       canvas.translate(cx, cy);
@@ -455,7 +467,7 @@ class TrackScene extends PositionComponent
             Offset(0, h),
             [
               fogCol,
-              Color(GameConfig.trackFillArgbFor(game.selectedWorld) | 0xFF000000),
+              Color(GameConfig.trackFillArgbFor(_world) | 0xFF000000),
             ],
           ),
       );
@@ -476,11 +488,10 @@ class TrackScene extends PositionComponent
 
     var idx = 0;
     for (var r = 0; r <= _valRows; r++) {
-      // Quadratic row concentration near horizon for ultra-smooth 1/Z water!
       final rf = r / _valRows;
       final t = (rf * rf * 0.45 + rf * 0.55) * tBottom;
       final y = horizonY + spanValley * t;
-      final p = (pFar + t * (1.0 - pFar)).clamp(0.125, 2.4).toDouble();
+      final p = (pFar + t * (1.0 - pFar)).clamp(0.118, 2.5).toDouble();
       final z = 1.0 / p;
       final depth = (z - 1.0) / (GameConfig.farDepthRatio - 1.0);
       final distFromHorizon = 1.0 - depth;
@@ -522,8 +533,7 @@ class TrackScene extends PositionComponent
         ),
     );
 
-    // Smooth atmospheric horizon haze melting distant water into the sky!
-    final hazeH = (h - horizonY) * 0.20;
+    final hazeH = (h - horizonY) * 0.22;
     canvas.drawRect(
       Rect.fromLTWH(0, horizonY - 2, w, hazeH + 2),
       Paint()
@@ -541,7 +551,7 @@ class TrackScene extends PositionComponent
   }
 
   // ---------------------------------------------------------------
-  // 5. Multi-Corridor `1/Z` 3D Cliffs, Islands & Viaduct Ruins
+  // 5. Rich 10-Slot Asymmetric 3D Cliff Terraces, Cyan River & Chasm
   // ---------------------------------------------------------------
 
   void _renderStreaming3DValleyCorridors(Canvas canvas, double w, double h) {
@@ -558,15 +568,15 @@ class TrackScene extends PositionComponent
     final fogCol = _horizonFogColor;
     final lightCol = _worldLightColor;
     final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
+    final isMarsh = _world == GameWorld.moonveilMarsh;
 
-    const slotCount = 7;
-    const span = 1.26;
+    const slotCount = 10;
+    const span = 1.30;
     const step = span / slotCount;
     final scroll = game.travelled / GameConfig.trackLength;
     final slotBase = (scroll / step).floor();
     final phase = scroll % step;
 
-    // Back-to-front painter's order (k = 0 is farthest near horizon -> k = slotCount-1 is closest!)
     for (var k = 0; k < slotCount; k++) {
       final distH = phase + k * step;
       final depth = 1.02 - distH;
@@ -577,59 +587,85 @@ class TrackScene extends PositionComponent
       final sc = game.perspectiveFactor(depth);
       final hw = halfPlayer * sc;
       final cx = game.trackCenterXForDepth(depth.clamp(0.0, 1.0).toDouble());
+      final ybDeck = game.yForDepth(depth);
       final yVal = game.valleyYForDepth(depth);
       final fade = ((1.02 - depth) / 0.14).clamp(0.0, 1.0).toDouble();
-      final fogAmt = (depth * 0.62).clamp(0.0, 0.58).toDouble();
+      final fogAmt = (depth * 0.56).clamp(0.0, 0.54).toDouble();
 
-      // A) Outer Towering 3D Canyon Cliffs & Ancient Forest Banks (alternating sides so water shines between!)
+      // A) Close Left Cliffside Terraces + Glowing Turquoise River Shelf
+      // (`06-22-12.png` & `06-23-20.png`)!
       if (canyon != null) {
-        final cliffSide = worldSlot.isEven ? -1.0 : 1.0;
-        final cw = w * 0.72 * sc;
+        final cw = w * 0.86 * sc;
         final ch = cw * (canyon.height / canyon.width);
-        final px = cx + cliffSide * hw * 2.52;
-        final py = yVal + ch * 0.05;
+        final leftX = cx - hw * (worldSlot.isEven ? 1.44 : 1.78);
+        // Rise high above the bridge parapet so cliffs, pines & purple flora
+        // fill the left flank right beside the causeway!
+        final leftBottomY = ybDeck + ch * 0.34;
 
-        // Soft bioluminescent reflection on the 3D water beneath the cliff!
+        // Luminous turquoise cliffside waterfall/stream pool (`06-22-12` left!)
+        final cyanCol = isMarsh
+            ? const Color(0xFF42FAEA)
+            : const Color(0xFF38ECFF);
         canvas.drawOval(
           Rect.fromCenter(
-            center: Offset(px - cliffSide * cw * 0.12, yVal + ch * 0.02),
-            width: cw * 0.85,
-            height: cw * 0.18,
+            center: Offset(leftX + cw * 0.20, ybDeck - ch * 0.08),
+            width: cw * 0.78,
+            height: cw * 0.16,
           ),
-          Paint()..color = lightCol.withValues(alpha: 0.12 * fade),
+          Paint()
+            ..color = cyanCol.withValues(alpha: 0.28 * fade)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0),
         );
 
         _drawFoggedElement(
           canvas,
           canyon,
-          cx: px,
-          bottomY: py,
+          cx: leftX,
+          bottomY: leftBottomY,
           dw: cw,
           dh: ch,
-          flipX: cliffSide > 0,
+          flipX: false,
           alpha: fade,
           fogColor: fogCol,
           fogAmount: fogAmt,
         );
+
+        // In Moonveil Marsh (`06-22-29.png`), lush ancient forest cliffs frame
+        // the right bank closely as well over glowing cyan marsh pools!
+        if (isMarsh && worldSlot.isOdd) {
+          final rightBankX = cx + hw * 1.56;
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: Offset(rightBankX - cw * 0.18, yVal),
+              width: cw * 0.86,
+              height: cw * 0.20,
+            ),
+            Paint()
+              ..color = const Color(0xFF3EF6EA).withValues(alpha: 0.32 * fade)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7.0),
+          );
+          _drawFoggedElement(
+            canvas,
+            canyon,
+            cx: rightBankX,
+            bottomY: ybDeck + ch * 0.36,
+            dw: cw * 0.94,
+            dh: ch * 0.94,
+            flipX: true,
+            alpha: fade,
+            fogColor: fogCol,
+            fogAmount: fogAmt,
+          );
+        }
       }
 
-      // B) Mid-Valley 3D Viaduct Arch Ruins & Floating/Marsh Islands on the opposite flank!
-      final midSide = worldSlot.isEven ? 1.0 : -1.0;
+      // B) Right Open Sheer Chasm: Multi-Altitude Floating Islands & Viaducts!
       final useViaduct = (worldSlot.abs() % 3 == 1) && viaduct != null;
       if (useViaduct) {
-        final vw = w * 0.56 * sc;
+        final vw = w * 0.62 * sc;
         final vh = vw * (viaduct.height / viaduct.width);
-        final px = cx + midSide * hw * 1.56;
-        final py = yVal + vh * 0.04;
-
-        canvas.drawOval(
-          Rect.fromCenter(
-            center: Offset(px, yVal + vh * 0.02),
-            width: vw * 0.88,
-            height: vw * 0.16,
-          ),
-          Paint()..color = const Color(0x55101824).withValues(alpha: 0.30 * fade),
-        );
+        final px = cx + hw * 1.58;
+        final py = yVal + vh * 0.06;
 
         _drawFoggedElement(
           canvas,
@@ -638,7 +674,7 @@ class TrackScene extends PositionComponent
           bottomY: py,
           dw: vw,
           dh: vh,
-          flipX: midSide > 0,
+          flipX: true,
           alpha: fade,
           fogColor: fogCol,
           fogAmount: fogAmt * 0.88,
@@ -646,18 +682,20 @@ class TrackScene extends PositionComponent
       } else if (island != null) {
         final bob = math.sin(game.ambientSeconds * 1.5 + worldSlot * 1.7) *
             h *
-            0.008 *
+            0.009 *
             sc;
-        final iw = w * 0.48 * sc;
+        final iw = w * 0.56 * sc;
         final ih = iw * (island.height / island.width);
-        final px = cx + midSide * hw * 1.66;
-        final py = yVal + ih * 0.04 - bob;
+        final highFloat = worldSlot.isEven;
+        final px = cx + hw * (highFloat ? 1.82 : 1.46);
+        final py =
+            (highFloat ? ybDeck - ih * 0.08 : yVal + ih * 0.08) - bob;
 
         canvas.drawOval(
           Rect.fromCenter(
             center: Offset(px, yVal + ih * 0.02),
-            width: iw * 0.76,
-            height: iw * 0.15,
+            width: iw * 0.72,
+            height: iw * 0.14,
           ),
           Paint()..color = lightCol.withValues(alpha: 0.14 * fade),
         );
@@ -669,10 +707,10 @@ class TrackScene extends PositionComponent
           bottomY: py,
           dw: iw,
           dh: ih,
-          flipX: midSide > 0,
+          flipX: true,
           alpha: fade,
           fogColor: fogCol,
-          fogAmount: fogAmt * 0.85,
+          fogAmount: fogAmt * 0.84,
         );
       }
     }
@@ -714,7 +752,6 @@ class TrackScene extends PositionComponent
     canvas.restore();
   }
 
-  /// Gentle low-lying water/chasm mist wisps rising across the valley.
   void _renderDriftingValleyMist(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
     if (h <= horizonY) {
@@ -731,25 +768,29 @@ class TrackScene extends PositionComponent
           width: w * 1.30,
           height: h * 0.11,
         ),
-        Paint()..color = mistCol.withValues(alpha: 0.065),
+        Paint()..color = mistCol.withValues(alpha: 0.068),
       );
     }
   }
 
   // ---------------------------------------------------------------
-  // 6. True 3D Extruded Stone Causeway + Block-Jointed Curbs + Halo
+  // 6. Wide 3D Stone Causeway + Left Parapet + Right Cliff Drop-Off
   // ---------------------------------------------------------------
 
   void _render3DExtrudedStoneCauseway(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
-    if (h <= horizonY) {
+    final blend = game.introCameraBlend;
+    // On Main Screen (`blend == 1.0`), causeway stays tucked below view while
+    // Soul hovers up in the sky (`06-22-47`), rising smoothly during dive!
+    if (h <= horizonY || blend > 0.96) {
       return;
     }
+
     final spanToPlayer = math.max(1.0, game.playerPlaneY - horizonY);
     final depthBottom = game.depthForScreenY(h);
     final halfPlayer = w * GameConfig.trackBottomHalfWidthRatio;
 
-    // A) Under-bridge shadow cast onto the 3D water/valley floor below
+    // A) Under-bridge shadow & sheer chiseled cliff rock-face under right edge!
     final shadowPath = Path();
     const sideSteps = 16;
     for (var i = 0; i <= sideSteps; i++) {
@@ -757,7 +798,7 @@ class TrackScene extends PositionComponent
       final sc = game.perspectiveFactor(d);
       final cx = game.trackCenterXForDepth(d);
       final yv = game.valleyYForDepth(d);
-      final hw = halfPlayer * sc * 1.18;
+      final hw = halfPlayer * sc * 1.16;
       if (i == 0) {
         shadowPath.moveTo(cx - hw, yv);
       } else {
@@ -769,13 +810,13 @@ class TrackScene extends PositionComponent
       final sc = game.perspectiveFactor(d);
       final cx = game.trackCenterXForDepth(d);
       final yv = game.valleyYForDepth(d);
-      final hw = halfPlayer * sc * 1.18;
+      final hw = halfPlayer * sc * 1.16;
       shadowPath.lineTo(cx + hw, yv);
     }
     shadowPath.close();
-    canvas.drawPath(shadowPath, Paint()..color = const Color(0x52080E18));
+    canvas.drawPath(shadowPath, Paint()..color = const Color(0x5A080E18));
 
-    // B) 12x48 Flagstone Slab Deck (`track_strip.png`)
+    // B) 12x48 Flagstone Slab Deck (`track_strip.png`) + Specular Sky Sheen
     final strip = game.trackStrip;
     if (strip != null) {
       _renderStripMesh(
@@ -799,19 +840,18 @@ class TrackScene extends PositionComponent
         ..close();
       canvas.drawPath(
         fallback,
-        Paint()
-          ..color = Color(
-              GameConfig.trackFillArgbFor(game.selectedWorld) | 0xFF000000),
+        Paint()..color = Color(GameConfig.trackFillArgbFor(_world) | 0xFF000000),
       );
     }
 
-    // C) True 3D Extruded Stone Curb Parapets + Glowing Cyan/Gold Rune Seams!
+    // C) Asymmetric Left Stone Parapet + Glowing Cyan Crystal Seams + Right
+    //    Sheer Cliff-Drop Coping (`06-22-12.png`, `06-23-20.png`, `06-22-29.png`)!
     _render3DExtrudedCurbs(canvas, w, h, depthBottom, halfPlayer);
 
-    // D) Atmospheric distance mist + Glowing Celestial Horizon Ring at bridge crest!
+    // D) Atmospheric distance glow + Celestial Horizon Ring at bridge crest!
     final crestX = game.trackCenterXForDepth(1.0);
     final crestY = game.yForDepth(1.0);
-    final ringR = w * 0.048;
+    final ringR = w * 0.044;
     final lightCol = _worldLightColor;
 
     canvas.drawCircle(
@@ -829,23 +869,14 @@ class TrackScene extends PositionComponent
           const [0.0, 0.50, 1.0],
         ),
     );
-    // Glowing golden/cyan portal ring on the distant bridge horizon (Screenshot 1!)
     canvas.drawCircle(
       Offset(crestX, crestY - ringR * 0.45),
-      ringR * 0.72,
+      ringR * 0.68,
       Paint()
         ..color = lightCol.withValues(alpha: 0.78)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.4
+        ..strokeWidth = 2.2
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.8),
-    );
-    canvas.drawCircle(
-      Offset(crestX, crestY - ringR * 0.45),
-      ringR * 0.72,
-      Paint()
-        ..color = const Color(0xFFFFFCE8).withValues(alpha: 0.85)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.3,
     );
   }
 
@@ -856,30 +887,35 @@ class TrackScene extends PositionComponent
     double depthBottom,
     double halfPlayer,
   ) {
+    final isMarsh = _world == GameWorld.moonveilMarsh;
     final Color curbTop;
     final Color curbInner;
     final Color curbOuter;
     final Color jointCol;
     final Color runeGlow;
-    switch (game.selectedWorld) {
+    final Color mossCol;
+    switch (_world) {
       case GameWorld.duskHollow:
-        curbTop = const Color(0xFF9484B4);
-        curbInner = const Color(0xFF4C3E6A);
-        curbOuter = const Color(0xFF2C2244);
-        jointCol = const Color(0xAA34284E);
-        runeGlow = const Color(0xFF66F4FF);
+        curbTop = const Color(0xFFA696C4);
+        curbInner = const Color(0xFF524472);
+        curbOuter = const Color(0xFF2E2248);
+        jointCol = const Color(0xAA32264C);
+        runeGlow = const Color(0xFF4CF6FF);
+        mossCol = const Color(0xFF567A52);
       case GameWorld.moonveilMarsh:
-        curbTop = const Color(0xFF568A96);
-        curbInner = const Color(0xFF264C56);
-        curbOuter = const Color(0xFF142C36);
-        jointCol = const Color(0xAA18343E);
-        runeGlow = const Color(0xFF68FFF2);
+        curbTop = const Color(0xFF5A909C);
+        curbInner = const Color(0xFF244E58);
+        curbOuter = const Color(0xFF122C36);
+        jointCol = const Color(0xAA16343E);
+        runeGlow = const Color(0xFF58FFF2);
+        mossCol = const Color(0xFF3E7850);
       case GameWorld.emberfallCanyon:
-        curbTop = const Color(0xFFD8A06A);
-        curbInner = const Color(0xFF7E4C2E);
+        curbTop = const Color(0xFFDEA66E);
+        curbInner = const Color(0xFF804E30);
         curbOuter = const Color(0xFF4C2A1A);
         jointCol = const Color(0xAA5A321E);
         runeGlow = const Color(0xFFFFCE5C);
+        mossCol = const Color(0xFF7A6838);
     }
 
     const segs = 28;
@@ -892,19 +928,26 @@ class TrackScene extends PositionComponent
     final pTop = Paint()..color = curbTop;
 
     for (final side in const [-1.0, 1.0]) {
+      // Left side ALWAYS has the tall sculpted stone parapet (`06-22-12.png`).
+      // Right side is an open sheer cliff-drop coping in Dusk/Emberfall and a
+      // mossy stone curb in Moonveil Marsh (`06-22-29.png`)!
+      final isOpenCliffEdge = (side > 0) && !isMarsh;
+      final curbWFactor = isOpenCliffEdge ? 0.024 : 0.052;
+      final curbHFactor = isOpenCliffEdge ? 0.008 : 0.032;
+      final dropFactor = isOpenCliffEdge ? 0.095 : 0.055;
+
       final pathOuter = Path();
       final pathInner = Path();
       final pathTop = Path();
 
-      // Forward along outer/inner edges from horizon (i=0) to bottom (i=segs)
       for (var i = 0; i <= segs; i++) {
         final d = 1.0 - (i / segs) * dSpan;
         final sc = game.perspectiveFactor(d);
         final cx = game.trackCenterXForDepth(d);
         final yb = game.yForDepth(d);
         final hw = halfPlayer * sc;
-        final cw = w * 0.046 * sc;
-        final ch = w * 0.024 * sc;
+        final cw = w * curbWFactor * sc;
+        final ch = w * curbHFactor * sc;
 
         final inX = cx + side * hw;
         final outX = cx + side * (hw + cw);
@@ -919,16 +962,15 @@ class TrackScene extends PositionComponent
         }
       }
 
-      // Return along complementary edge from bottom (i=segs) to horizon (i=0)
       for (var i = segs; i >= 0; i--) {
         final d = 1.0 - (i / segs) * dSpan;
         final sc = game.perspectiveFactor(d);
         final cx = game.trackCenterXForDepth(d);
         final yb = game.yForDepth(d);
         final hw = halfPlayer * sc;
-        final cw = w * 0.046 * sc;
-        final ch = w * 0.024 * sc;
-        final drop = h * 0.052 * sc;
+        final cw = w * curbWFactor * sc;
+        final ch = w * curbHFactor * sc;
+        final drop = h * dropFactor * sc;
 
         final inX = cx + side * hw;
         final outX = cx + side * (hw + cw);
@@ -944,11 +986,11 @@ class TrackScene extends PositionComponent
       canvas.drawPath(pathInner, pInner);
       canvas.drawPath(pathTop, pTop);
 
-      // Chiseled curb stone joints + glowing cyan/gold rune-seam spots!
-      const blockCount = 10;
+      // Chiseled curb stone joints + moss tufts + vivid cyan crystal light pools!
+      const blockCount = 11;
       final phase = scrollBlocks % 1.0;
       for (var b = 0; b < blockCount; b++) {
-        final distH = (b + phase) / blockCount * 1.14;
+        final distH = (b + phase) / blockCount * 1.16;
         final d = 1.0 - distH;
         if (d > 0.98 || d < depthBottom) {
           continue;
@@ -957,8 +999,8 @@ class TrackScene extends PositionComponent
         final cx = game.trackCenterXForDepth(d);
         final yb = game.yForDepth(d);
         final hw = halfPlayer * sc;
-        final cw = w * 0.046 * sc;
-        final ch = w * 0.024 * sc;
+        final cw = w * curbWFactor * sc;
+        final ch = w * curbHFactor * sc;
         final fade = ((1.0 - d) / 0.16).clamp(0.0, 1.0).toDouble();
 
         final inX = cx + side * hw;
@@ -967,31 +1009,46 @@ class TrackScene extends PositionComponent
           Offset(inX, yb - ch),
           Offset(outX, yb - ch),
           Paint()
-            ..color = jointCol.withValues(alpha: 0.68 * fade)
-            ..strokeWidth = (1.8 * sc).clamp(0.8, 2.8).toDouble(),
+            ..color = jointCol.withValues(alpha: 0.72 * fade)
+            ..strokeWidth = (1.9 * sc).clamp(0.8, 3.0).toDouble(),
         );
 
-        // Every alternate block joint seeps glowing cyan/gold magic light onto the curb seam!
         final worldBlock = (scrollBlocks.floor() - b).abs();
-        if ((worldBlock + (side > 0 ? 1 : 0)) % 2 == 0) {
-          final rGlow = (5.5 * sc).clamp(1.6, 8.5).toDouble();
+        // Lush moss tufts nestled along stone curb seams
+        if (worldBlock % 3 == 0) {
+          final mr = (6.0 * sc).clamp(1.8, 9.5).toDouble();
           canvas.drawOval(
             Rect.fromCenter(
-              center: Offset(inX - side * rGlow * 0.35, yb),
-              width: rGlow * 1.4,
-              height: rGlow * 2.6,
+              center: Offset(inX - side * mr * 0.25, yb + 1.0 * sc),
+              width: mr * 1.6,
+              height: mr * 2.8,
+            ),
+            Paint()..color = mossCol.withValues(alpha: 0.62 * fade),
+          );
+        }
+
+        // Glowing cyan/turquoise bioluminescent crystal pools along the curb
+        // (`06-23-20.png` & `06-22-12.png`!)
+        if ((worldBlock + (side > 0 ? 1 : 0)) % 2 == 0) {
+          final rGlow = (6.8 * sc).clamp(2.0, 11.0).toDouble();
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: Offset(inX - side * rGlow * 0.45, yb + 1.5 * sc),
+              width: rGlow * 1.9,
+              height: rGlow * 3.1,
             ),
             Paint()
-              ..color = runeGlow.withValues(alpha: 0.52 * fade)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5),
+              ..color = runeGlow.withValues(alpha: 0.58 * fade)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.5),
           );
           canvas.drawOval(
             Rect.fromCenter(
-              center: Offset(inX - side * rGlow * 0.15, yb),
-              width: rGlow * 0.55,
-              height: rGlow * 1.5,
+              center: Offset(inX - side * rGlow * 0.18, yb + 1.0 * sc),
+              width: rGlow * 0.65,
+              height: rGlow * 1.7,
             ),
-            Paint()..color = const Color(0xFFEFFFFF).withValues(alpha: 0.80 * fade),
+            Paint()
+              ..color = const Color(0xFFEFFFFF).withValues(alpha: 0.88 * fade),
           );
         }
       }
@@ -1059,16 +1116,56 @@ class TrackScene extends PositionComponent
         ),
     );
 
+    // Wet polished flagstone specular sky sheen + right-side sunset shadow band
+    // (`06-22-12.png`!)
+    final depthBot = game.depthForScreenY(h);
+    final cxTop = game.trackCenterXForDepth(1.0);
+    final cxBot = game.trackCenterXForDepth(depthBot);
+    final hwTop = halfPlayer * GameConfig.farScale;
+    final hwBot = halfPlayer * game.perspectiveFactor(depthBot);
+
+    final sheenPath = Path()
+      ..moveTo(cxTop - hwTop * 0.55, horizonY)
+      ..lineTo(cxTop + hwTop * 0.25, horizonY)
+      ..lineTo(cxBot + hwBot * 0.25, h)
+      ..lineTo(cxBot - hwBot * 0.55, h)
+      ..close();
+    canvas.drawPath(
+      sheenPath,
+      Paint()
+        ..shader = Gradient.linear(
+          Offset(cxTop, horizonY),
+          Offset(cxBot, h),
+          [
+            const Color(0x28B8CCFF),
+            const Color(0x1898B4F8),
+            const Color(0x08809CE8),
+          ],
+          const [0.0, 0.55, 1.0],
+        ),
+    );
+
+    if (_world != GameWorld.moonveilMarsh) {
+      final rightShade = Path()
+        ..moveTo(cxTop + hwTop * 0.36, horizonY)
+        ..lineTo(cxTop + hwTop, horizonY)
+        ..lineTo(cxBot + hwBot, h)
+        ..lineTo(cxBot + hwBot * 0.42, h)
+        ..close();
+      canvas.drawPath(
+        rightShade,
+        Paint()..color = const Color(0x28181030),
+      );
+    }
+
     // Subtle distance atmospheric haze over the far 12% of the stone causeway
     final fogCol = _horizonFogColor;
-    final cxTop = game.trackCenterXForDepth(1.0);
-    final cxMid = game.trackCenterXForDepth(0.68);
-    final hwTop = halfPlayer * GameConfig.farScale * 1.15;
-    final hwMid = halfPlayer * game.perspectiveFactor(0.68) * 1.15;
-    final yMid = game.yForDepth(0.68);
+    final cxMid = game.trackCenterXForDepth(0.70);
+    final hwMid = halfPlayer * game.perspectiveFactor(0.70) * 1.15;
+    final yMid = game.yForDepth(0.70);
     final hazePath = Path()
-      ..moveTo(cxTop - hwTop, horizonY - 2)
-      ..lineTo(cxTop + hwTop, horizonY - 2)
+      ..moveTo(cxTop - hwTop * 1.15, horizonY - 2)
+      ..lineTo(cxTop + hwTop * 1.15, horizonY - 2)
       ..lineTo(cxMid + hwMid, yMid)
       ..lineTo(cxMid - hwMid, yMid)
       ..close();
@@ -1079,7 +1176,7 @@ class TrackScene extends PositionComponent
           Offset(cxTop, horizonY),
           Offset(cxMid, yMid),
           [
-            fogCol.withValues(alpha: 0.76),
+            fogCol.withValues(alpha: 0.72),
             fogCol.withValues(alpha: 0.0),
           ],
         ),
@@ -1087,20 +1184,21 @@ class TrackScene extends PositionComponent
   }
 
   // ---------------------------------------------------------------
-  // 7. Curb-Mounted 3D Lanterns & Crystal Shrines + Deck Shadows
+  // 7. Curb-Mounted 3D Lanterns & Crystal Shrines + Diagonal Shadows
   // ---------------------------------------------------------------
 
   void _renderBridgeCurbPropsAndShadows(Canvas canvas, double w, double h) {
     final horizonY = game.horizonY;
-    if (h <= horizonY) {
+    if (h <= horizonY || game.introCameraBlend > 0.94) {
       return;
     }
     final pillar = game.corridorPillar;
     final cliff = game.cliffSide;
-    final auraColor = Color(GameConfig.lanternAuraArgbFor(game.selectedWorld));
+    final auraColor = Color(GameConfig.lanternAuraArgbFor(_world));
     final fogCol = _horizonFogColor;
+    final isMarsh = _world == GameWorld.moonveilMarsh;
 
-    const slotCount = 5;
+    const slotCount = 6;
     const depthSpan = 1.18;
     const step = depthSpan / slotCount;
     final scroll = game.travelled / GameConfig.trackLength;
@@ -1116,39 +1214,40 @@ class TrackScene extends PositionComponent
       }
       final sc = game.perspectiveFactor(depth);
       final ybDeck = game.yForDepth(depth);
-      final ybCurb = ybDeck - w * 0.022 * sc;
       final cx = game.trackCenterXForDepth(depth);
       final hw = halfPlayer * sc;
       final fade = (distH / 0.14).clamp(0.0, 1.0).toDouble();
-      final fogAmt = (depth * 0.44).clamp(0.0, 0.42).toDouble();
+      final fogAmt = (depth * 0.42).clamp(0.0, 0.40).toDouble();
       final worldSlot = slotBase - k;
 
       for (final side in const [-1.0, 1.0]) {
-        final isLantern =
-            ((worldSlot.abs() + (side > 0 ? 1 : 0)) % 2 == 0) || cliff == null;
-        final curbCenterX = cx + side * (hw + w * 0.023 * sc);
+        // On open right cliff edge (`duskHollow`/`emberfall`), place crystalline
+        // rune shrines (`cliff_side.png`) every 3rd slot just like `06-22-12.png`!
+        if (!isMarsh && side > 0 && (worldSlot.abs() % 3 != 1)) {
+          continue;
+        }
 
-        if (isLantern) {
-          final pw = w * 0.155 * sc;
+        final useLantern = isMarsh
+            ? true
+            : (side < 0 && (worldSlot.abs() % 2 == 0)) || cliff == null;
+        final curbCenterX = cx + side * (hw + w * 0.020 * sc);
+        final ybCurb = ybDeck - w * (side < 0 || isMarsh ? 0.024 : 0.006) * sc;
+
+        if (useLantern) {
+          final pw = w * (isMarsh ? 0.145 : 0.155) * sc;
           final aspect = pillar != null ? pillar.height / pillar.width : 1.75;
           final ph = pw * aspect;
 
-          // Diagonal shadow + warm lantern light pool cast inward onto flagstones!
+          // Warm golden/cyan lantern pool on the mossy stone slabs (`06-22-29`)!
           canvas.drawOval(
             Rect.fromCenter(
-              center: Offset(curbCenterX - side * pw * 0.42, ybDeck + 2 * sc),
-              width: pw * 0.95,
-              height: pw * 0.22,
+              center: Offset(curbCenterX - side * pw * 0.34, ybDeck + 2 * sc),
+              width: pw * 1.25,
+              height: pw * 0.34,
             ),
-            Paint()..color = const Color(0x55120C22).withValues(alpha: 0.34 * fade),
-          );
-          canvas.drawOval(
-            Rect.fromCenter(
-              center: Offset(curbCenterX - side * pw * 0.28, ybDeck),
-              width: pw * 1.15,
-              height: pw * 0.30,
-            ),
-            Paint()..color = auraColor.withValues(alpha: 0.24 * fade),
+            Paint()
+              ..color = auraColor.withValues(alpha: 0.30 * fade)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5.0),
           );
 
           if (pillar != null) {
@@ -1165,33 +1264,30 @@ class TrackScene extends PositionComponent
               fogAmount: fogAmt,
             );
           }
-        } else {
-          final cw = w * 0.215 * sc;
+        } else if (cliff != null) {
+          final cw = w * 0.24 * sc;
           final ch = cw * (cliff.height / cliff.width);
 
-          // Diagonal crystal-shrine shadow cast across the stone slabs (Screenshot 2!)
-          canvas.drawOval(
-            Rect.fromCenter(
-              center: Offset(curbCenterX - side * cw * 0.38, ybDeck + 2 * sc),
-              width: cw * 0.92,
-              height: cw * 0.20,
-            ),
-            Paint()..color = const Color(0x66120C24).withValues(alpha: 0.42 * fade),
-          );
-          canvas.drawOval(
-            Rect.fromCenter(
-              center: Offset(curbCenterX - side * cw * 0.18, ybDeck),
-              width: cw * 0.76,
-              height: cw * 0.22,
-            ),
-            Paint()..color = auraColor.withValues(alpha: 0.18 * fade),
+          // Long diagonal sunset shadow cast down-left across the flagstones
+          // (`06-22-12.png` right crystal monolith shadow!)
+          final shadowPoly = Path()
+            ..moveTo(curbCenterX - cw * 0.35, ybDeck)
+            ..lineTo(curbCenterX + cw * 0.25, ybDeck)
+            ..lineTo(curbCenterX - cw * 1.05, ybDeck + cw * 0.34)
+            ..lineTo(curbCenterX - cw * 1.45, ybDeck + cw * 0.24)
+            ..close();
+          canvas.drawPath(
+            shadowPoly,
+            Paint()
+              ..color = const Color(0x68140C28).withValues(alpha: 0.48 * fade)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0),
           );
 
           _drawFoggedElement(
             canvas,
             cliff,
             cx: curbCenterX,
-            bottomY: ybCurb + ch * 0.05,
+            bottomY: ybCurb + ch * 0.06,
             dw: cw,
             dh: ch,
             flipX: side > 0,
@@ -1205,7 +1301,7 @@ class TrackScene extends PositionComponent
   }
 
   // ---------------------------------------------------------------
-  // 8. Bioluminescent Firefly Spores & Solar Comet Streaks
+  // 8. Bioluminescent Firefly Spores, Title DoF Veil & Portal Flash
   // ---------------------------------------------------------------
 
   void _renderFloatingFireflyMotes(Canvas canvas, double h) {
@@ -1231,18 +1327,63 @@ class TrackScene extends PositionComponent
       final my = game.yForDepth(depth) - h * 0.20 * floatH * sc;
       final pulse = 0.55 + 0.45 * math.sin(t * 2.4 + i * 1.7);
       final fade = ((1.0 - depth) / 0.20).clamp(0.0, 1.0).toDouble() * pulse;
-      final r = (3.4 * sc).clamp(1.2, 4.8).toDouble();
+      final r = (3.5 * sc).clamp(1.2, 5.0).toDouble();
 
       canvas.drawCircle(
         Offset(mx, my),
         r * 2.3,
-        Paint()..color = glowCol.withValues(alpha: 0.24 * fade),
+        Paint()..color = glowCol.withValues(alpha: 0.26 * fade),
       );
       canvas.drawCircle(
         Offset(mx, my),
         r * 0.75,
         Paint()
-          ..color = const Color(0xFFFFFCE8).withValues(alpha: 0.80 * fade),
+          ..color = const Color(0xFFFFFCE8).withValues(alpha: 0.84 * fade),
+      );
+    }
+  }
+
+  void _renderTitleDepthOfFieldAndPortalVeil(
+    Canvas canvas,
+    double w,
+    double h,
+  ) {
+    final titleBlend = game.introCameraBlend;
+    if (titleBlend > 0.02) {
+      // Soft atmospheric depth-of-field mist over the far background so
+      // close-up front-facing Soul (`06-22-47.png`) pops in razor-sharp 3D!
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h),
+        Paint()
+          ..shader = Gradient.linear(
+            Offset(0, h * 0.35),
+            Offset(0, h),
+            [
+              const Color(0x00281844),
+              _horizonFogColor.withValues(alpha: 0.16 * titleBlend),
+              const Color(0xFF1A1032).withValues(alpha: 0.42 * titleBlend),
+            ],
+            const [0.0, 0.58, 1.0],
+          ),
+      );
+    }
+
+    final flash = game.portalFlashProgress;
+    if (flash > 0.01) {
+      final center = Offset(w * 0.5, h * 0.52);
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h),
+        Paint()
+          ..shader = Gradient.radial(
+            center,
+            w * 0.85,
+            [
+              const Color(0xFFFFFFFF).withValues(alpha: 0.44 * flash),
+              _worldLightColor.withValues(alpha: 0.28 * flash),
+              const Color(0x00000000),
+            ],
+            const [0.0, 0.55, 1.0],
+          ),
       );
     }
   }

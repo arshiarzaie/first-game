@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
 
+import 'components/crystal_portal_gate.dart';
 import 'components/energy_orb.dart';
 import 'components/obstacle.dart';
 import 'components/power_up_pickup.dart';
@@ -21,22 +22,37 @@ import 'systems/progress_store.dart';
 import 'systems/score_manager.dart';
 import 'systems/vertical_motion.dart';
 
-/// Lifecycle stages of `SOUL: DUSK RUN` (`0.19.0+19`):
-///  * [RunStage.titleHover] — Main Screen: Soul floats alive in the 3D sky;
-///  * [RunStage.introFlight] — START clicked: Soul arcs through the sky,
-///    swoops gracefully down to the chiseled stone bridge as the camera glides
-///    into chase position;
-///  * [RunStage.running] — Soul lands on the bridge and sprints forward!
+/// Lifecycle stages of `SOUL: DUSK RUN` (`0.20.0+20`):
+///  * [RunStage.titleHover] — Main Screen: close-up front-facing Soul hovers
+///    alive in the 3D sky (blinking, smiling, streaming golden ribbons);
+///  * [RunStage.introFlight] — Soul clicked / START pressed: Soul closes his
+///    eyes, spins 180° away from the camera, dives like a golden comet down to
+///    the stone causeway while the camera swoops close behind him;
+///  * [RunStage.running] — Soul glides onto the flagstones and sprints forward
+///    in close over-the-shoulder chase view, with Crystal Portals ahead!
 enum RunStage { titleHover, introFlight, running }
 
-/// Flame game root for `SOUL: DUSK RUN` (`0.19.0+19` — Living 3D Main Screen,
-/// Cinematic Sky-Flight Descent to Ground Run, & 100% Modular 3D World).
+class _WorldArtBundle {
+  ui.Image? backdrop;
+  ui.Image? trackStrip;
+  ui.Image? valleyFloor;
+  ui.Image? canyonWall;
+  ui.Image? skyCitadel;
+  ui.Image? corridorPillar;
+  ui.Image? floatingIsland;
+  ui.Image? cliffSide;
+}
+
+/// Flame game root for `SOUL: DUSK RUN` (`0.20.0+20` — Close-Up Front-Facing
+/// Living Main Screen, 180° Spin & Golden Comet Dive, Closer Over-the-Shoulder
+/// Chase Camera, Asymmetric Cliffside World & Crystal Portal Gateways).
 class SoulDuskRunGame extends FlameGame {
   SoulDuskRunGame({
     int seed = 0,
     this.selectedWorld = GameWorld.duskHollow,
     bool startInTitleHover = true,
   })  : _seed = seed,
+        _currentWorld = selectedWorld,
         _stage =
             startInTitleHover ? RunStage.titleHover : RunStage.introFlight;
 
@@ -58,19 +74,17 @@ class SoulDuskRunGame extends FlameGame {
   late SeededObstacleGenerator _generator;
   late final SoulPlayer player;
 
+  final Map<GameWorld, _WorldArtBundle> _worldBundles =
+      <GameWorld, _WorldArtBundle>{};
+
   ui.Image? soulSprite;
+  ui.Image? soulHoverOpenSprite;
+  ui.Image? soulHoverBlinkSprite;
   ui.Image? soulJumpSprite;
   ui.Image? soulSlideSprite;
-  ui.Image? worldBackdrop;
-  ui.Image? trackStrip;
-  ui.Image? valleyFloor;
-  ui.Image? canyonWall;
-  ui.Image? skyCitadel;
   ui.Image? viaductRuin;
   ui.Image? skyCloud;
-  ui.Image? corridorPillar;
-  ui.Image? floatingIsland;
-  ui.Image? cliffSide;
+  ui.Image? crystalPortalSprite;
   ui.Image? orbSprite;
   ui.Image? obstacleSprite;
   ui.Image? obstacleArchSprite;
@@ -78,22 +92,27 @@ class SoulDuskRunGame extends FlameGame {
   ui.Image? goldenCloudSprite;
   List<ui.Image> runFrames = const [];
 
+  GameWorld _currentWorld;
   RunStage _stage;
   double _introProgress = 0;
   double _ambientSeconds = 0;
   double _elapsedSeconds = 0;
   double _travelled = 0;
   double _distanceSinceWave = 0;
+  double _distanceSincePortal = 0;
   double _distanceToNextWave = GameConfig.firstWaveDistance;
   double _dashOrbTimer = 0;
   double _hudNotifyTimer = 0;
   double _cameraLane = GameConfig.initialLane.toDouble();
   double _stumbleTimer = 0;
+  double _portalFlashTimer = 0;
+  double _portalBannerTimer = 0;
   bool _ended = false;
   int _runNumber = 0;
 
   ProgressStore? _progress;
 
+  GameWorld get currentWorld => _currentWorld;
   RunStage get stage => _stage;
   bool get isTitleHovering => _stage == RunStage.titleHover;
   bool get isIntroFlying => _stage == RunStage.introFlight;
@@ -109,13 +128,30 @@ class SoulDuskRunGame extends FlameGame {
   double get cameraLane => _cameraLane;
   double get baseSupportElevation => 0.0;
 
-  /// Smooth camera blend (`1.0` on Main Screen sky-gaze -> `0.0` in low chase).
+  double get portalFlashProgress =>
+      (_portalFlashTimer / 0.65).clamp(0.0, 1.0).toDouble();
+  bool get showPortalArrivalBanner => _portalBannerTimer > 0;
+
+  ui.Image? get worldBackdrop => _worldBundles[_currentWorld]?.backdrop;
+  ui.Image? get trackStrip => _worldBundles[_currentWorld]?.trackStrip;
+  ui.Image? get valleyFloor => _worldBundles[_currentWorld]?.valleyFloor;
+  ui.Image? get canyonWall => _worldBundles[_currentWorld]?.canyonWall;
+  ui.Image? get skyCitadel => _worldBundles[_currentWorld]?.skyCitadel;
+  ui.Image? get corridorPillar => _worldBundles[_currentWorld]?.corridorPillar;
+  ui.Image? get floatingIsland => _worldBundles[_currentWorld]?.floatingIsland;
+  ui.Image? get cliffSide => _worldBundles[_currentWorld]?.cliffSide;
+
+  /// Smooth camera blend (`1.0` on Sky-High Main Screen -> `0.0` in close
+  /// over-the-shoulder chase view behind Soul!).
   double get introCameraBlend {
     switch (_stage) {
       case RunStage.titleHover:
         return 1.0;
       case RunStage.introFlight:
-        final u = _introProgress.clamp(0.0, 1.0).toDouble();
+        // Hold sky camera briefly for Soul's serene eye-close & start of 180°
+        // spin (`0.00..0.18`), then swoop down smoothly (`0.18..0.88`)!
+        final u =
+            ((_introProgress - 0.18) / 0.70).clamp(0.0, 1.0).toDouble();
         final s = u * u * (3.0 - 2.0 * u);
         return 1.0 - s;
       case RunStage.running:
@@ -128,9 +164,10 @@ class SoulDuskRunGame extends FlameGame {
       case RunStage.titleHover:
         return 0.0;
       case RunStage.introFlight:
-        final u = ((_introProgress - 0.08) / 0.92).clamp(0.0, 1.0).toDouble();
+        final u =
+            ((_introProgress - 0.18) / 0.82).clamp(0.0, 1.0).toDouble();
         final smooth = u * u * (3.0 - 2.0 * u);
-        return GameConfig.startSpeed * (0.16 + 0.84 * smooth);
+        return GameConfig.startSpeed * (0.12 + 0.88 * smooth);
       case RunStage.running:
         final base = difficulty.speedAt(_elapsedSeconds);
         return powerUps.isSolarDashing
@@ -143,13 +180,13 @@ class SoulDuskRunGame extends FlameGame {
     switch (_stage) {
       case RunStage.titleHover:
         return GameConfig.titleHoverElevation +
-            math.sin(_ambientSeconds * 2.3) * 0.11 +
-            math.sin(_ambientSeconds * 1.15) * 0.04;
+            math.sin(_ambientSeconds * 2.15) * 0.10 +
+            math.sin(_ambientSeconds * 1.08) * 0.04;
       case RunStage.introFlight:
         final u = _introProgress.clamp(0.0, 1.0).toDouble();
         const startE = GameConfig.titleHoverElevation;
         const peakE = GameConfig.introFlightPeakElevation;
-        const apexU = 0.26;
+        const apexU = 0.24;
         if (u < apexU) {
           final tUp = u / apexU;
           return startE + (peakE - startE) * math.sin(tUp * math.pi * 0.5);
@@ -170,10 +207,10 @@ class SoulDuskRunGame extends FlameGame {
 
   bool get _acceptsRunnerControls =>
       _stage == RunStage.running ||
-      (_stage == RunStage.introFlight && _introProgress >= 0.78);
+      (_stage == RunStage.introFlight && _introProgress >= 0.80);
 
   // ---------------------------------------------------------------
-  // S18/S19 Low Over-the-Shoulder `3.60x` 3D Chase Camera
+  // S20 Closer, Lower Over-the-Shoulder `4.15x` 3D Chase Camera
   // ---------------------------------------------------------------
 
   double get horizonY =>
@@ -182,7 +219,7 @@ class SoulDuskRunGame extends FlameGame {
           GameConfig.titleHorizonLiftRatio * introCameraBlend);
 
   double get playerPlaneY =>
-      size.y * (GameConfig.playerPlaneRatio + 0.03 * introCameraBlend);
+      size.y * (GameConfig.playerPlaneRatio + 0.06 * introCameraBlend);
 
   double get roadCurveFactor {
     if (_stage != RunStage.running) {
@@ -209,7 +246,7 @@ class SoulDuskRunGame extends FlameGame {
 
   double perspectiveFactor(double depth) {
     final z = (1.0 + depth * (GameConfig.farDepthRatio - 1.0))
-        .clamp(0.45, 8.0)
+        .clamp(0.42, 8.5)
         .toDouble();
     return 1.0 / z;
   }
@@ -218,7 +255,7 @@ class SoulDuskRunGame extends FlameGame {
     final span = math.max(1.0, playerPlaneY - horizonY);
     const pFar = GameConfig.farScale;
     final t = (y - horizonY) / span;
-    final p = (pFar + t * (1.0 - pFar)).clamp(0.125, 2.25).toDouble();
+    final p = (pFar + t * (1.0 - pFar)).clamp(0.118, 2.38).toDouble();
     final z = 1.0 / p;
     return (z - 1.0) / (GameConfig.farDepthRatio - 1.0);
   }
@@ -280,11 +317,55 @@ class SoulDuskRunGame extends FlameGame {
     }
   }
 
-  Future<void> _preloadArt() async {
-    worldBackdrop = await _tryLoadImage(
-      GameConfig.backdropKeyFor(selectedWorld),
-      'Sky atmosphere dome',
+  Future<_WorldArtBundle> _loadWorldBundle(GameWorld world) async {
+    final bundle = _WorldArtBundle();
+    bundle.backdrop = await _tryLoadImage(
+      GameConfig.backdropKeyFor(world),
+      'Sky atmosphere dome ($world)',
     );
+    final trackKey = GameConfig.trackStripKeyFor(world);
+    bundle.trackStrip = trackKey == null
+        ? null
+        : await _tryLoadImage(trackKey, 'Track strip ($world)');
+    bundle.valleyFloor = await _tryLoadImage(
+      GameConfig.valleyFloorKeyFor(world),
+      '3D valley/water floor ($world)',
+    );
+    bundle.canyonWall = await _tryLoadImage(
+      GameConfig.canyonWallKeyFor(world),
+      '3D canyon cliff wall ($world)',
+    );
+    bundle.skyCitadel = await _tryLoadImage(
+      GameConfig.skyCitadelKeyFor(world),
+      '3D levitating sky citadel ($world)',
+    );
+    bundle.corridorPillar = await _tryLoadImage(
+      GameConfig.corridorPillarKeyFor(world),
+      'Parapet lantern ($world)',
+    );
+    bundle.floatingIsland = await _tryLoadImage(
+      GameConfig.floatingIslandKeyFor(world),
+      'Floating valley island ($world)',
+    );
+    bundle.cliffSide = await _tryLoadImage(
+      GameConfig.cliffSideKeyFor(world),
+      'Bridge-edge flora & crystals ($world)',
+    );
+    return bundle;
+  }
+
+  Future<void> _preloadArt() async {
+    // 1. Load close-up Main Screen Soul sprites & active world bundle FIRST!
+    soulHoverOpenSprite = await _tryLoadImage(
+      GameConfig.soulHoverOpenSpriteKey,
+      'Soul close-up hover open-eyes',
+    );
+    soulHoverBlinkSprite = await _tryLoadImage(
+      GameConfig.soulHoverBlinkSpriteKey,
+      'Soul close-up hover blink-eyes',
+    );
+    _worldBundles[selectedWorld] = await _loadWorldBundle(selectedWorld);
+
     try {
       soulSprite = await loadKeyedSprite(GameConfig.soulSpriteAsset);
     } catch (error) {
@@ -296,22 +377,6 @@ class SoulDuskRunGame extends FlameGame {
     soulSlideSprite =
         await _tryLoadImage(GameConfig.soulSlideSpriteKey, 'Soul slide pose');
 
-    final trackKey = GameConfig.trackStripKeyFor(selectedWorld);
-    trackStrip = trackKey == null
-        ? null
-        : await _tryLoadImage(trackKey, 'Track strip');
-    valleyFloor = await _tryLoadImage(
-      GameConfig.valleyFloorKeyFor(selectedWorld),
-      '3D valley/water floor',
-    );
-    canyonWall = await _tryLoadImage(
-      GameConfig.canyonWallKeyFor(selectedWorld),
-      '3D canyon cliff wall',
-    );
-    skyCitadel = await _tryLoadImage(
-      GameConfig.skyCitadelKeyFor(selectedWorld),
-      '3D levitating sky citadel',
-    );
     viaductRuin = await _tryLoadImage(
       GameConfig.viaductRuinSpriteAsset,
       '3D stone viaduct ruin',
@@ -320,17 +385,9 @@ class SoulDuskRunGame extends FlameGame {
       GameConfig.skyCloudSpriteAsset,
       '3D volumetric sky cloud',
     );
-    corridorPillar = await _tryLoadImage(
-      GameConfig.corridorPillarKeyFor(selectedWorld),
-      'Parapet lantern',
-    );
-    floatingIsland = await _tryLoadImage(
-      GameConfig.floatingIslandKeyFor(selectedWorld),
-      'Floating valley island',
-    );
-    cliffSide = await _tryLoadImage(
-      GameConfig.cliffSideKeyFor(selectedWorld),
-      'Bridge-edge flora & crystals',
+    crystalPortalSprite = await _tryLoadImage(
+      GameConfig.crystalPortalSpriteAsset,
+      '3D faceted crystal portal gate',
     );
     obstacleSprite =
         await _tryLoadImage(GameConfig.obstacleSpriteAsset, 'Crystal spikes');
@@ -361,22 +418,37 @@ class SoulDuskRunGame extends FlameGame {
       debugPrint('Run-cycle frames unavailable ($error). Using fallback.');
       runFrames = const [];
     }
+
+    // 2. Warm-cache remaining worlds so Crystal Portal transitions have 0ms hitch!
+    for (final world in GameWorld.values) {
+      if (!_worldBundles.containsKey(world)) {
+        _worldBundles[world] = await _loadWorldBundle(world);
+      }
+    }
   }
 
   @override
   void update(double dt) {
     super.update(dt);
 
-    final camFollow = (1.0 - math.exp(-dt * 9.0)).clamp(0.0, 1.0).toDouble();
+    final camFollow = (1.0 - math.exp(-dt * 10.5)).clamp(0.0, 1.0).toDouble();
     _cameraLane += (player.currentLane - _cameraLane) * camFollow;
 
     if (_ended) {
       return;
     }
 
-    // Living ambient clock ALWAYS ticks so clouds, water, fireflies & Soul
-    // breathe and hover right on the Main Screen!
     _ambientSeconds += dt;
+
+    if (_portalFlashTimer > 0) {
+      _portalFlashTimer = math.max(0.0, _portalFlashTimer - dt);
+    }
+    if (_portalBannerTimer > 0) {
+      _portalBannerTimer = math.max(0.0, _portalBannerTimer - dt);
+      if (_portalBannerTimer <= 0) {
+        hudTick.value += 1;
+      }
+    }
 
     if (_stage == RunStage.titleHover) {
       return;
@@ -416,6 +488,7 @@ class SoulDuskRunGame extends FlameGame {
     final ds = currentSpeed * dt;
     _travelled += ds;
     _distanceSinceWave += ds;
+    _distanceSincePortal += ds;
 
     if (powerUps.isSolarDashing) {
       _dashOrbTimer += dt;
@@ -446,8 +519,8 @@ class SoulDuskRunGame extends FlameGame {
 
   // --------------------------------------------------------------- gameplay
 
-  /// Clicking START on the Main Screen launches Soul into the animated
-  /// sky-flight arc descending onto the stone bridge!
+  /// Tapping directly on Soul OR clicking START launches Soul's 4-phase
+  /// serene blink -> 180° spin -> golden comet dive -> low stone-slab glide!
   void startRun() {
     if (_stage != RunStage.titleHover || _ended || paused) {
       return;
@@ -455,12 +528,30 @@ class SoulDuskRunGame extends FlameGame {
     _stage = RunStage.introFlight;
     _introProgress = 0.0;
     if (player.isMounted && size.x > 0 && size.y > 0) {
-      final skyBurstPos = Vector2(
-        player.position.x,
-        playerPlaneY -
-            GameConfig.titleHoverElevation * size.y * GameConfig.jumpHeightRatio,
-      );
+      final skyBurstPos = Vector2(size.x * 0.35, size.y * 0.43);
       add(VfxBurst.shieldShatter(skyBurstPos));
+    }
+    hudTick.value += 1;
+  }
+
+  /// Triggered when Soul sprints through a 3D `CrystalPortalGate` (`06-22-22`
+  /// -> `06-22-29`), transforming the surrounding biome on the fly!
+  void enterCrystalPortal(GameWorld nextWorld) {
+    if (_ended) {
+      return;
+    }
+    _currentWorld = nextWorld;
+    _portalFlashTimer = 0.65;
+    _portalBannerTimer = 2.6;
+    for (final obs in children.whereType<Obstacle>().toList()) {
+      if (!obs.isGoldenBounceCloud && obs.frontDepth <= 0.24) {
+        obs.removeFromParent();
+      }
+    }
+    if (player.isMounted) {
+      final burstPos = Vector2(player.position.x, playerPlaneY - size.y * 0.06);
+      add(VfxBurst.shieldShatter(burstPos));
+      add(VfxBurst.jumpRipple(burstPos));
     }
     hudTick.value += 1;
   }
@@ -593,6 +684,23 @@ class SoulDuskRunGame extends FlameGame {
   }
 
   void _spawnWave() {
+    // Spawn a majestic 3D Crystal Portal Gateway every `portalIntervalDistance`!
+    if (_distanceSincePortal >= GameConfig.portalIntervalDistance) {
+      _distanceSincePortal = 0;
+      _distanceSinceWave = 0;
+      _distanceToNextWave = 460;
+
+      final targetBiome = GameConfig.nextWorldAfter(_currentWorld);
+      add(CrystalPortalGate(targetWorld: targetBiome, initialDepth: 1.06));
+      for (var i = 0; i < 5; i++) {
+        add(EnergyOrb(
+          lane: 1,
+          initialDepth: 0.90 + i * 0.05,
+        ));
+      }
+      return;
+    }
+
     final wave = _generator.nextWave(
       speed: currentSpeed,
       difficulty: difficulty.levelAt(_elapsedSeconds),
@@ -702,6 +810,9 @@ class SoulDuskRunGame extends FlameGame {
     for (final c in children.whereType<Obstacle>().toList()) {
       c.removeFromParent();
     }
+    for (final c in children.whereType<CrystalPortalGate>().toList()) {
+      c.removeFromParent();
+    }
     for (final c in children.whereType<EnergyOrb>().toList()) {
       c.removeFromParent();
     }
@@ -718,17 +829,21 @@ class SoulDuskRunGame extends FlameGame {
     score.reset();
     player.reset();
 
+    _currentWorld = selectedWorld;
     _elapsedSeconds = 0;
     _travelled = 0;
     _distanceSinceWave = 0;
+    _distanceSincePortal = 0;
     _distanceToNextWave = GameConfig.firstWaveDistance;
     _dashOrbTimer = 0;
     _cameraLane = GameConfig.initialLane.toDouble();
     _stumbleTimer = 0;
+    _portalFlashTimer = 0;
+    _portalBannerTimer = 0;
     _ended = false;
   }
 
-  /// PLAY AGAIN: resets and immediately launches Soul's sky-flight swoop onto
+  /// PLAY AGAIN: resets and immediately launches Soul's sky-flight dive onto
   /// the stone bridge!
   void resetRun() {
     _runNumber += 1;
@@ -747,7 +862,7 @@ class SoulDuskRunGame extends FlameGame {
   }
 
   /// Returns cleanly to the Living 3D Main Screen (`RunStage.titleHover`) with
-  /// Soul hovering alive in the sky!
+  /// close-up Soul hovering alive in the sky!
   void returnToTitleHover() {
     _runNumber += 1;
     _generator = SeededObstacleGenerator(seed: _seed + _runNumber);
