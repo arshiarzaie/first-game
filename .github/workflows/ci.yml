@@ -99,6 +99,23 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Publish direct-download APK pre-release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="$(grep '^version:' pubspec.yaml | awk '{print $2}' | tr '+' '-')"
+          TAG="apk-v${VER}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" soul-dusk-run-debug.apk --clobber
+          else
+            gh release create "$TAG" soul-dusk-run-debug.apk \
+              --target "$GITHUB_SHA" \
+              --title "SOUL: DUSK RUN v${VER} (Debug APK)" \
+              --notes "Direct one-tap Android debug APK build (${GITHUB_SHA})." \
+              --prerelease
+          fi
+
       # Sandboxes cannot read run logs; on failure, step output is committed
       # back to this branch ([skip ci], end of job, never alters the result).
       - name: Publish failure output for sandbox inspection
