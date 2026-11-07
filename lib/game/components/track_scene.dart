@@ -1264,7 +1264,7 @@ class TrackScene extends PositionComponent
               fogAmount: fogAmt,
             );
           }
-        } else if (cliff != null) {
+        } else {
           final cw = w * 0.24 * sc;
           final ch = cw * (cliff.height / cliff.width);
 
