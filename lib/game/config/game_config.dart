@@ -45,18 +45,18 @@ class GameConfig {
   static const double scorePerWorldUnit = 0.025;
   static const int orbScore = 10;
 
-  // ---- S21 30% Lower Heroic Over-the-Shoulder 3D Chase Camera ----
-  // Lowering camera elevation (`playerPlaneRatio - horizonRatio`) by ~30.2%
-  // (`0.420` -> `0.293`) opens 51.5% of the portrait screen above the horizon
-  // so players look low behind Soul out into a deep panoramic 3D world!
-  static const double farDepthRatio = 4.60;
-  static const double horizonRatio = 0.515;
-  static const double playerPlaneRatio = 0.808;
+  // ---- S22 Monumental Wide 3-Lane Causeway & Balanced Low Hero Camera ----
+  // Widened playfield ground (+34.5% width) + 40% longer runway sightline
+  // (`0.410 * h`) + broader horizon perspective (`farDepthRatio = 3.45`) so
+  // the 3-lane stone causeway feels massive and spacious around Soul!
+  static const double farDepthRatio = 3.45;
+  static const double horizonRatio = 0.445;
+  static const double playerPlaneRatio = 0.855;
   static const double farScale = 1.0 / farDepthRatio;
 
-  /// Sky-high camera framing on the Living Main Screen (`horizonY = 0.74 * h`)
+  /// Sky-high camera framing on the Living Main Screen (`horizonY = 0.73 * h`)
   /// showcasing close-up front-facing Soul against Sky Citadels & Sunset/Moon!
-  static const double titleHorizonLiftRatio = 0.225;
+  static const double titleHorizonLiftRatio = 0.285;
 
   /// Soul's living mid-air hover altitude on the Main Title Screen.
   static const double titleHoverElevation = 1.52;
@@ -77,20 +77,20 @@ class GameConfig {
   /// Gentle scenic S-curve amplitude toward the distant horizon.
   static const double roadCurveRatio = 0.095;
 
-  /// Half-width of the chiseled stone causeway at Soul's plane (`87%` width at
-  /// Soul's feet, widening naturally to fill `100%` of the bottom edge!).
-  static const double trackBottomHalfWidthRatio = 0.435;
+  /// Half-width of the monumental 3-lane stone causeway at Soul's plane
+  /// (`117%` of screen width at Soul's feet, keeping all 3 carved lanes wide!).
+  static const double trackBottomHalfWidthRatio = 0.585;
   static const double trackTopHalfWidthRatio =
       trackBottomHalfWidthRatio / farDepthRatio;
 
-  static const double trackTileRepeats = 2.15;
+  static const double trackTileRepeats = 2.55;
   static const double valleyTileRepeats = 2.45;
-  static const double cameraFollowRatio = 0.44;
-  static const double laneSpreadRatio = 0.58;
+  static const double cameraFollowRatio = 0.36;
+  static const double laneSpreadRatio = 0.588;
 
-  // ---- Closer Hero & Entity Sizing + Forgiving Side-Bump Stumble ----
-  static const double playerWidthRatio = 0.325;
-  static const double entityWidthRatio = 0.258;
+  // ---- Balanced Athletic Hero & Entity Scale on the Grand Avenue ----
+  static const double playerWidthRatio = 0.285;
+  static const double entityWidthRatio = 0.235;
   static const double hitboxFactor = 0.72;
   static const double collisionLaneThreshold = 0.27;
   static const double stumbleLaneThreshold = 0.43;
@@ -332,12 +332,12 @@ class GameConfig {
   static const double playerBobRatio = 0.024;
   static const double playerLeanAngle = 0.16;
 
-  // ---- S21 24-Frame True-3D Biomechanical Soul Run-Cycle ----
+  // ---- S22 24-Frame Athletic Pixar-3D Soul Run-Cycle ----
   static const String runFramesPrefix = 'soul/run/frame_';
   static const int runFrameCount = 24;
-  static const double runCycleFps = 28.0;
+  static const double runCycleFps = 29.0;
   static const int runIdleFrame = 1;
-  static const double runCycleFitBoost = 1.18;
+  static const double runCycleFitBoost = 1.14;
 }
 
 enum GameWorld { duskHollow, moonveilMarsh, emberfallCanyon }

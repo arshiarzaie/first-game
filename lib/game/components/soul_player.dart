@@ -438,7 +438,7 @@ class SoulPlayer extends PositionComponent
     final totalLiftPx =
         game.effectivePlayerElevation * game.size.y * GameConfig.jumpHeightRatio;
     final chaseFootY = position.y - totalLiftPx;
-    final chaseBodyScreenY = chaseFootY - chaseBaseD * 0.39;
+    final chaseBodyScreenY = chaseFootY - chaseBaseD * 0.450;
 
     final screenPt = _introDiveScreenCenter(position.x, chaseBodyScreenY);
     final cx = screenPt.dx - originX;
@@ -619,7 +619,7 @@ class SoulPlayer extends PositionComponent
         ? math.sin((_landingTimer / 0.15).clamp(0.0, 1.0) * math.pi) * dh * 0.038
         : 0.0;
 
-    final footAnchorShift = dh * 0.39;
+    final footAnchorShift = dh * 0.450;
     final supportFloorY = h / 2 - supportLiftPx;
     final centerX = w / 2;
     final strideTheta =
@@ -709,6 +709,26 @@ class SoulPlayer extends PositionComponent
       canvas.drawPath(tail, Paint()..color = const Color(0xAAFFC44C));
     }
 
+    // 2.5 Soft Pixar Solar Corona behind Soul's chiseled sun-crown
+    //     (adds radiant golden atmosphere while keeping sprite silhouette 100% razor-sharp!)
+    final headGlowCenter = Offset(centerX, bodyCenterY - dh * 0.14);
+    final headGlowRadius = dw * 0.36;
+    canvas.drawCircle(
+      headGlowCenter,
+      headGlowRadius,
+      Paint()
+        ..shader = Gradient.radial(
+          headGlowCenter,
+          headGlowRadius,
+          const [
+            Color(0x46FFF0B4),
+            Color(0x20FFAE3C),
+            Color(0x00FF8E24),
+          ],
+          const [0.0, 0.58, 1.0],
+        ),
+    );
+
     // 3. Pixar-3D Soul Character Render!
     canvas.save();
     canvas.translate(centerX, bodyCenterY);
@@ -794,9 +814,9 @@ class SoulPlayer extends PositionComponent
     // B) Warm radial golden pool right beneath Soul's feet
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(centerX, supportFloorY + 5),
-        width: dw * 0.88 * shadowScale,
-        height: dh * 0.20 * shadowScale,
+        center: Offset(centerX, supportFloorY + 4),
+        width: dw * 0.62 * shadowScale,
+        height: dh * 0.16 * shadowScale,
       ),
       Paint()
         ..color = const Color(0xFFFFB844).withValues(alpha: 0.38 * trailAlpha)
@@ -804,12 +824,12 @@ class SoulPlayer extends PositionComponent
     );
 
     // C) Long Blazing Golden Reflection Streak (`06-22-12`, `06-23-20`, `06-22-29`)!
-    final tailSkewX = isDiagonalGlideJet ? -dw * 0.34 : 0.0;
+    final tailSkewX = isDiagonalGlideJet ? -dw * 0.30 : 0.0;
     final streakOuter = Path()
-      ..moveTo(centerX - dw * 0.15 * shadowScale, supportFloorY + 2)
-      ..lineTo(centerX + dw * 0.15 * shadowScale, supportFloorY + 2)
-      ..lineTo(centerX + tailSkewX + dw * 0.08, supportFloorY + trailLen)
-      ..lineTo(centerX + tailSkewX - dw * 0.08, supportFloorY + trailLen)
+      ..moveTo(centerX - dw * 0.11 * shadowScale, supportFloorY + 2)
+      ..lineTo(centerX + dw * 0.11 * shadowScale, supportFloorY + 2)
+      ..lineTo(centerX + tailSkewX + dw * 0.06, supportFloorY + trailLen)
+      ..lineTo(centerX + tailSkewX - dw * 0.06, supportFloorY + trailLen)
       ..close();
     canvas.drawPath(
       streakOuter,

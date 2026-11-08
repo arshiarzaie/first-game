@@ -732,7 +732,7 @@ class TrackScene extends PositionComponent
           );
         }
 
-        final leftX = cx - hw * (worldSlot.isEven ? 1.44 : 1.74);
+        final leftX = cx - hw * (worldSlot.isEven ? 1.50 : 1.76);
         final leftBottomY = ybDeck + ch * 0.34;
 
         final cyanCol = isMarsh
@@ -1432,7 +1432,7 @@ class TrackScene extends PositionComponent
         final ybCurb = ybDeck - w * (side < 0 || isMarsh ? 0.024 : 0.006) * sc;
 
         if (useLantern) {
-          final pw = w * (isMarsh ? 0.145 : 0.155) * sc;
+          final pw = w * (isMarsh ? 0.135 : 0.145) * sc;
           final aspect = pillar != null ? pillar.height / pillar.width : 1.75;
           final ph = pw * aspect;
 
@@ -1463,7 +1463,7 @@ class TrackScene extends PositionComponent
             );
           }
         } else {
-          final cw = w * 0.24 * sc;
+          final cw = w * 0.205 * sc;
           final ch = cw * (cliff.height / cliff.width);
 
           // Long diagonal sunset shadow cast down-left across the flagstones

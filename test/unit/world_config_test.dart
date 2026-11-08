@@ -85,15 +85,17 @@ void main() {
     }
   });
 
-  test('S21 24-frame run cycle and 30%-lower chase camera invariants hold', () {
+  test('S22 24-frame athletic run cycle and wide 3-lane causeway invariants hold',
+      () {
     expect(GameConfig.runFrameCount, equals(24));
     expect(GameConfig.runCycleFps, greaterThanOrEqualTo(24.0));
 
-    // Camera elevation proxy (playerPlaneRatio - horizonRatio) dropped ~30%
-    // from S20's 0.42 to ~0.293, opening >50% of the screen to the 3D world!
-    final cameraSpan = GameConfig.playerPlaneRatio - GameConfig.horizonRatio;
-    expect(GameConfig.horizonRatio, greaterThanOrEqualTo(0.50));
-    expect(cameraSpan, lessThanOrEqualTo(0.31));
+    // Grand 3-lane causeway is wide (>= 1.10 * screenWidth at player plane)
+    // and offers >= 0.38 * screenHeight visible runway ahead of Soul!
+    expect(GameConfig.trackBottomHalfWidthRatio, greaterThanOrEqualTo(0.55));
+    final runwaySpan = GameConfig.playerPlaneRatio - GameConfig.horizonRatio;
+    expect(runwaySpan, greaterThanOrEqualTo(0.38));
+    expect(GameConfig.horizonRatio, inInclusiveRange(0.40, 0.50));
     expect(GameConfig.ambientParticleCount, greaterThanOrEqualTo(40));
   });
 
