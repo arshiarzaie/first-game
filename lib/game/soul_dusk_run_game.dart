@@ -306,6 +306,9 @@ class SoulDuskRunGame extends FlameGame {
     add(TrackScene());
     player = SoulPlayer();
     add(player);
+    if (_stage == RunStage.introFlight) {
+      _seedInitialVistaElements();
+    }
   }
 
   Future<ui.Image?> _tryLoadImage(String key, String label) async {
@@ -527,11 +530,47 @@ class SoulDuskRunGame extends FlameGame {
     }
     _stage = RunStage.introFlight;
     _introProgress = 0.0;
+    _seedInitialVistaElements();
     if (player.isMounted && size.x > 0 && size.y > 0) {
       final skyBurstPos = Vector2(size.x * 0.35, size.y * 0.43);
       add(VfxBurst.shieldShatter(skyBurstPos));
     }
     hudTick.value += 1;
+  }
+
+  /// Pre-populates the 3D stone causeway ahead with welcoming Sun-Energy Orbs,
+  /// a Golden Dawn Bounce-Cloud, and an early Soul Light Blessing so the
+  /// low-angle 3D vista is immediately rich and alive from touchdown!
+  void _seedInitialVistaElements() {
+    const ribbonLanes = [1, 1, 2, 2, 1, 0, 0, 1];
+    for (var i = 0; i < ribbonLanes.length; i++) {
+      add(EnergyOrb(
+        lane: ribbonLanes[i],
+        initialDepth: 0.56 + i * 0.06,
+      ));
+    }
+
+    // Golden Dawn Bounce-Cloud (`isGoldenBounceCloud`, 100% beneficial sky-arc!)
+    add(Obstacle(
+      lane: 2,
+      kind: ObstacleKind.trainWithRamp,
+      initialDepth: 0.82,
+    ));
+    for (var k = 0; k < 4; k++) {
+      final u = (k + 0.5) / 4;
+      add(EnergyOrb(
+        lane: 2,
+        initialDepth: 0.87 + k * 0.045,
+        elevation: math.sin(u * math.pi) * 1.25,
+      ));
+    }
+
+    // Early gleaming Soul Light Blessing pickup on the opposite lane!
+    add(PowerUpPickup(
+      lane: 0,
+      kind: PowerUpKind.magnet,
+      initialDepth: 0.98,
+    ));
   }
 
   /// Triggered when Soul sprints through a 3D `CrystalPortalGate` (`06-22-22`
@@ -688,16 +727,18 @@ class SoulDuskRunGame extends FlameGame {
     if (_distanceSincePortal >= GameConfig.portalIntervalDistance) {
       _distanceSincePortal = 0;
       _distanceSinceWave = 0;
-      _distanceToNextWave = 460;
+      _distanceToNextWave = 420;
 
       final targetBiome = GameConfig.nextWorldAfter(_currentWorld);
       add(CrystalPortalGate(targetWorld: targetBiome, initialDepth: 1.06));
-      for (var i = 0; i < 5; i++) {
+      for (var i = 0; i < 6; i++) {
         add(EnergyOrb(
           lane: 1,
-          initialDepth: 0.90 + i * 0.05,
+          initialDepth: 0.88 + i * 0.045,
         ));
       }
+      add(EnergyOrb(lane: 0, initialDepth: 0.96));
+      add(EnergyOrb(lane: 2, initialDepth: 0.96));
       return;
     }
 
@@ -728,31 +769,41 @@ class SoulDuskRunGame extends FlameGame {
             (slalom != null && i < slalom.length) ? slalom[i] : orbLane;
         add(EnergyOrb(
           lane: itemLane,
-          initialDepth: 0.96 + i * 0.055,
+          initialDepth: 0.94 + i * 0.048,
+        ));
+      }
+    }
+
+    final bonusLane = wave.bonusOrbLane;
+    if (bonusLane != null) {
+      for (var i = 0; i < 3; i++) {
+        add(EnergyOrb(
+          lane: bonusLane,
+          initialDepth: 1.00 + i * 0.052,
         ));
       }
     }
 
     final arcLane = wave.jumpArcLane;
     if (arcLane != null && !powerUps.isSolarDashing) {
-      const arcCount = 5;
+      const arcCount = 6;
       for (var i = 0; i < arcCount; i++) {
         final t = i / (arcCount - 1);
         add(EnergyOrb(
           lane: arcLane,
-          initialDepth: 1.00 + i * 0.04,
-          elevation: math.sin(t * math.pi) * 0.94,
+          initialDepth: 0.99 + i * 0.036,
+          elevation: math.sin(t * math.pi) * 0.96,
         ));
       }
     }
 
     final slideLane = wave.slideTunnelLane;
     if (slideLane != null && !powerUps.isSolarDashing) {
-      const tunnelOrbs = 4;
+      const tunnelOrbs = 5;
       for (var i = 0; i < tunnelOrbs; i++) {
         add(EnergyOrb(
           lane: slideLane,
-          initialDepth: 1.02 + i * 0.04,
+          initialDepth: 1.01 + i * 0.038,
           elevation: 0.0,
         ));
       }
@@ -760,13 +811,13 @@ class SoulDuskRunGame extends FlameGame {
 
     final bounceLane = wave.roofCoinLane;
     if (bounceLane != null && !powerUps.isSolarDashing) {
-      const skyArcCount = 5;
+      const skyArcCount = 6;
       for (var i = 0; i < skyArcCount; i++) {
         final u = (i + 0.5) / skyArcCount;
         add(EnergyOrb(
           lane: bounceLane,
-          initialDepth: waveCoreDepth + 0.05 + i * 0.065,
-          elevation: math.sin(u * math.pi) * 1.32,
+          initialDepth: waveCoreDepth + 0.04 + i * 0.058,
+          elevation: math.sin(u * math.pi) * 1.34,
         ));
       }
     }
@@ -775,7 +826,7 @@ class SoulDuskRunGame extends FlameGame {
       add(PowerUpPickup(
         lane: wave.powerUpLane!,
         kind: wave.powerUpKind!,
-        initialDepth: 1.14,
+        initialDepth: 1.12,
       ));
     }
   }
@@ -852,6 +903,7 @@ class SoulDuskRunGame extends FlameGame {
 
     _stage = RunStage.introFlight;
     _introProgress = 0.0;
+    _seedInitialVistaElements();
 
     overlays.remove(gameOverOverlayId);
     overlays.remove(pauseOverlayId);

@@ -36,6 +36,7 @@ class SpawnWave {
     this.movingTrainLanes = const {},
     this.orbTrailCount = 1,
     this.slalomLanes,
+    this.bonusOrbLane,
     this.jumpArcLane,
     this.slideTunnelLane,
     this.roofCoinLane,
@@ -54,6 +55,7 @@ class SpawnWave {
 
   final int orbTrailCount;
   final List<int>? slalomLanes;
+  final int? bonusOrbLane;
   final int? jumpArcLane;
   final int? slideTunnelLane;
 
@@ -201,9 +203,10 @@ class SeededObstacleGenerator {
     int? orbLane;
     var orbTrailCount = 0;
     List<int>? slalomLanes;
+    int? bonusOrbLane;
     if (_random.nextDouble() < GameConfig.orbChance) {
       orbLane = freeLanes[_random.nextInt(freeLanes.length)];
-      orbTrailCount = 4 + _random.nextInt(2);
+      orbTrailCount = 5 + _random.nextInt(3);
       if (_lastSafeLane != orbLane &&
           !blocked.contains(_lastSafeLane) &&
           orbTrailCount >= 4) {
@@ -213,6 +216,13 @@ class SeededObstacleGenerator {
           blocked.contains(midLane) ? orbLane : midLane,
           for (var k = 2; k < orbTrailCount; k++) orbLane,
         ];
+      }
+      if (freeLanes.length > 1 && _random.nextDouble() < 0.65) {
+        final otherFree = [
+          for (final l in freeLanes)
+            if (l != orbLane) l,
+        ];
+        bonusOrbLane = otherFree[_random.nextInt(otherFree.length)];
       }
     }
     _lastSafeLane = orbLane ?? freeLanes.first;
@@ -250,7 +260,7 @@ class SeededObstacleGenerator {
 
     int? powerUpLane;
     PowerUpKind? powerUpKind;
-    if (_waveIndex >= 3 && _random.nextDouble() < 0.24) {
+    if (_waveIndex >= 2 && _random.nextDouble() < 0.38) {
       final candidateLanes = freeLanes.length > 1 && orbLane != null
           ? [for (final l in freeLanes) if (l != orbLane) l]
           : freeLanes;
@@ -260,12 +270,12 @@ class SeededObstacleGenerator {
     }
 
     // Add generous spacing whenever 3D trains are present so carriages never
-    // overlap the next wave!
+    // overlap the next wave, while keeping brisk action density!
     final hasAnyTrain = kinds.values.any(
       (k) => k == ObstacleKind.tallMonolith || k == ObstacleKind.trainWithRamp,
     );
-    final baseJitter = hasAnyTrain ? 1.52 : 1.18;
-    final gap = minGapFor(speed) * (baseJitter + _random.nextDouble() * 0.34);
+    final baseJitter = hasAnyTrain ? 1.38 : 1.08;
+    final gap = minGapFor(speed) * (baseJitter + _random.nextDouble() * 0.28);
 
     return SpawnWave(
       blockedLanes: Set.unmodifiable(blocked),
@@ -276,6 +286,7 @@ class SeededObstacleGenerator {
       movingTrainLanes: Set.unmodifiable(moving),
       orbTrailCount: orbTrailCount,
       slalomLanes: slalomLanes == null ? null : List.unmodifiable(slalomLanes),
+      bonusOrbLane: bonusOrbLane,
       jumpArcLane: jumpArcLane,
       slideTunnelLane: slideTunnelLane,
       roofCoinLane: roofCoinLane,

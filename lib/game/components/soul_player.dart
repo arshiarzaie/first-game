@@ -32,6 +32,7 @@ class SoulPlayer extends PositionComponent
   int _hopTargetLane = GameConfig.initialLane;
   double _hopProgress = 1.0;
   double _elapsed = 0;
+  double _runFrameCursor = 0;
   double _lean = 0;
   bool _wasJumping = false;
   double _landingTimer = 0;
@@ -113,6 +114,17 @@ class SoulPlayer extends PositionComponent
   void update(double dt) {
     super.update(dt);
     _elapsed += dt;
+    if (game.isGroundRunning &&
+        !game.verticalMotion.isJumping &&
+        !game.verticalMotion.isSliding &&
+        !game.powerUps.isSolarDashing) {
+      final speedRatio = (game.currentSpeed / GameConfig.startSpeed)
+          .clamp(1.0, 1.42)
+          .toDouble();
+      _runFrameCursor = (_runFrameCursor +
+              dt * GameConfig.runCycleFps * speedRatio) %
+          GameConfig.runFrameCount;
+    }
 
     final targetInt = game.laneSystem.lane;
     if (targetInt != _hopTargetLane) {
@@ -183,6 +195,7 @@ class SoulPlayer extends PositionComponent
     _hopStartLane = _laneX;
     _hopTargetLane = game.laneSystem.lane;
     _hopProgress = 1.0;
+    _runFrameCursor = 0;
     _lean = 0;
     _wasJumping = false;
     _landingTimer = 0;
@@ -226,15 +239,11 @@ class SoulPlayer extends PositionComponent
     if (frames.isNotEmpty) {
       final int index;
       if (jumping || game.powerUps.hasShield) {
-        index = game.powerUps.hasShield ? 1 : 0;
+        index = (game.powerUps.hasShield ? 5 : 0) % frames.length;
       } else if (sliding) {
         index = 4 % frames.length;
       } else {
-        final speedRatio = (game.currentSpeed / GameConfig.startSpeed)
-            .clamp(1.0, 1.38)
-            .toDouble();
-        index = (_elapsed * GameConfig.runCycleFps * speedRatio).floor() %
-            frames.length;
+        index = _runFrameCursor.floor() % frames.length;
       }
       _renderChaseFrame(canvas, frames[index], isDedicatedPose: false);
       return;
@@ -429,7 +438,7 @@ class SoulPlayer extends PositionComponent
     final totalLiftPx =
         game.effectivePlayerElevation * game.size.y * GameConfig.jumpHeightRatio;
     final chaseFootY = position.y - totalLiftPx;
-    final chaseBodyScreenY = chaseFootY - chaseBaseD * 0.37;
+    final chaseBodyScreenY = chaseFootY - chaseBaseD * 0.39;
 
     final screenPt = _introDiveScreenCenter(position.x, chaseBodyScreenY);
     final cx = screenPt.dx - originX;
@@ -532,7 +541,7 @@ class SoulPlayer extends PositionComponent
     } else {
       // Final touchdown stride reach (`0.90..1.00`)!
       poseImg = game.runFrames.isNotEmpty
-          ? game.runFrames[2 % game.runFrames.length]
+          ? game.runFrames[3 % game.runFrames.length]
           : (game.soulJumpSprite ?? game.soulSprite);
     }
 
@@ -610,11 +619,17 @@ class SoulPlayer extends PositionComponent
         ? math.sin((_landingTimer / 0.15).clamp(0.0, 1.0) * math.pi) * dh * 0.038
         : 0.0;
 
-    final footAnchorShift = dh * 0.37;
+    final footAnchorShift = dh * 0.39;
     final supportFloorY = h / 2 - supportLiftPx;
     final centerX = w / 2;
-    final shadowScale =
-        (1.0 - airAboveSupport * 0.36).clamp(0.34, 1.0).toDouble();
+    final strideTheta =
+        (_runFrameCursor / GameConfig.runFrameCount) * 2.0 * math.pi;
+    final strideContactPulse = (!isDedicatedPose && airAboveSupport <= 0.02)
+        ? 0.94 + 0.08 * math.cos(2.0 * (strideTheta - 0.24 * math.pi))
+        : 1.0;
+    final shadowScale = ((1.0 - airAboveSupport * 0.36) * strideContactPulse)
+        .clamp(0.34, 1.06)
+        .toDouble();
 
     if (_trailFade > 0 && _flightTrail.length >= 2) {
       _renderCurvedFlightRibbon(canvas, w, h);

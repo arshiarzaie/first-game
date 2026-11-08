@@ -22,7 +22,7 @@ class GameConfig {
 
   /// Distance between in-run 3D Crystal Portal Gateways (`06-22-22.png` ->
   /// `06-22-29.png`) that seamlessly transition into the next biome!
-  static const double portalIntervalDistance = 7600;
+  static const double portalIntervalDistance = 4600;
 
   /// Normalized clearance threshold to soar cleanly above Dark Storm Clouds.
   static const double stormCloudClearElevation = 0.88;
@@ -33,27 +33,30 @@ class GameConfig {
   /// Duration scale of a Golden Dawn Bounce-Cloud sky-arc (`1.38x` floatier).
   static const double goldenCloudDurationScale = 1.38;
 
-  // ---- Spawning fairness ----
+  // ---- Spawning fairness & richer S21 track density ----
   static const double reactionTimeSeconds = 0.52;
   static const double laneSwitchSeconds = 0.135;
-  static const double twoLaneBlockBaseChance = 0.24;
-  static const double twoLaneBlockMaxChance = 0.65;
-  static const double orbChance = 0.88;
-  static const double firstWaveDistance = 360;
+  static const double twoLaneBlockBaseChance = 0.26;
+  static const double twoLaneBlockMaxChance = 0.68;
+  static const double orbChance = 0.96;
+  static const double firstWaveDistance = 240;
 
   // ---- Score ----
   static const double scorePerWorldUnit = 0.025;
   static const int orbScore = 10;
 
-  // ---- S20 Closer, Lower Over-the-Shoulder 3D Chase Camera & Hero Dive ----
-  static const double farDepthRatio = 4.15;
-  static const double horizonRatio = 0.35;
-  static const double playerPlaneRatio = 0.77;
+  // ---- S21 30% Lower Heroic Over-the-Shoulder 3D Chase Camera ----
+  // Lowering camera elevation (`playerPlaneRatio - horizonRatio`) by ~30.2%
+  // (`0.420` -> `0.293`) opens 51.5% of the portrait screen above the horizon
+  // so players look low behind Soul out into a deep panoramic 3D world!
+  static const double farDepthRatio = 4.60;
+  static const double horizonRatio = 0.515;
+  static const double playerPlaneRatio = 0.808;
   static const double farScale = 1.0 / farDepthRatio;
 
-  /// Sky-high camera framing on the Living Main Screen (`horizonY = 0.71 * h`)
+  /// Sky-high camera framing on the Living Main Screen (`horizonY = 0.74 * h`)
   /// showcasing close-up front-facing Soul against Sky Citadels & Sunset/Moon!
-  static const double titleHorizonLiftRatio = 0.36;
+  static const double titleHorizonLiftRatio = 0.225;
 
   /// Soul's living mid-air hover altitude on the Main Title Screen.
   static const double titleHoverElevation = 1.52;
@@ -86,8 +89,8 @@ class GameConfig {
   static const double laneSpreadRatio = 0.58;
 
   // ---- Closer Hero & Entity Sizing + Forgiving Side-Bump Stumble ----
-  static const double playerWidthRatio = 0.315;
-  static const double entityWidthRatio = 0.255;
+  static const double playerWidthRatio = 0.325;
+  static const double entityWidthRatio = 0.258;
   static const double hitboxFactor = 0.72;
   static const double collisionLaneThreshold = 0.27;
   static const double stumbleLaneThreshold = 0.43;
@@ -324,17 +327,17 @@ class GameConfig {
   }
 
   static const double backdropDriftAmplitude = 0.0;
-  static const double cameraSwayPerLane = 18;
-  static const int ambientParticleCount = 24;
+  static const double cameraSwayPerLane = 20;
+  static const int ambientParticleCount = 42;
   static const double playerBobRatio = 0.024;
   static const double playerLeanAngle = 0.16;
 
-  // ---- Soul run-cycle animation ----
+  // ---- S21 24-Frame True-3D Biomechanical Soul Run-Cycle ----
   static const String runFramesPrefix = 'soul/run/frame_';
-  static const int runFrameCount = 8;
-  static const double runCycleFps = 13.5;
+  static const int runFrameCount = 24;
+  static const double runCycleFps = 28.0;
   static const int runIdleFrame = 1;
-  static const double runCycleFitBoost = 1.16;
+  static const double runCycleFitBoost = 1.18;
 }
 
 enum GameWorld { duskHollow, moonveilMarsh, emberfallCanyon }
