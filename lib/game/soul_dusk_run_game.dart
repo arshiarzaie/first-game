@@ -22,14 +22,14 @@ import 'systems/progress_store.dart';
 import 'systems/score_manager.dart';
 import 'systems/vertical_motion.dart';
 
-/// Lifecycle stages of `SOUL: DUSK RUN` (`0.20.0+20`):
+/// Lifecycle stages of `SOUL: DUSK RUN`:
 ///  * [RunStage.titleHover] — Main Screen: close-up front-facing Soul hovers
 ///    alive in the 3D sky (blinking, smiling, streaming golden ribbons);
 ///  * [RunStage.introFlight] — Soul clicked / START pressed: Soul closes his
 ///    eyes, spins 180° away from the camera, dives like a golden comet down to
 ///    the stone causeway while the camera swoops close behind him;
 ///  * [RunStage.running] — Soul glides onto the flagstones and sprints forward
-///    in close over-the-shoulder chase view, with Crystal Portals ahead!
+///    in close over-the-shoulder chase view toward Abyssal Portal Gateways!
 enum RunStage { titleHover, introFlight, running }
 
 class _WorldArtBundle {
@@ -43,23 +43,26 @@ class _WorldArtBundle {
   ui.Image? cliffSide;
 }
 
-/// Flame game root for `SOUL: DUSK RUN` (`0.20.0+20` — Close-Up Front-Facing
-/// Living Main Screen, 180° Spin & Golden Comet Dive, Closer Over-the-Shoulder
-/// Chase Camera, Asymmetric Cliffside World & Crystal Portal Gateways).
+/// Flame game root for `SOUL: DUSK RUN` (Stage 3 Upgrade:
+/// Abyssal World-Termination Portal Logic where the road & world physically end
+/// at the portal cliff-edge with nothing behind it, plus a sensational
+/// `1.35s` Dimensional Rift Breach & unfurling new-world highway!).
 class SoulDuskRunGame extends FlameGame {
   SoulDuskRunGame({
     int seed = 0,
-    this.selectedWorld = GameWorld.duskHollow,
+    GameWorld selectedWorld = GameWorld.duskHollow,
     bool startInTitleHover = true,
   })  : _seed = seed,
+        _selectedWorld = selectedWorld,
         _currentWorld = selectedWorld,
         _stage =
             startInTitleHover ? RunStage.titleHover : RunStage.introFlight;
 
-  final GameWorld selectedWorld;
-
   static const String gameOverOverlayId = 'gameOver';
   static const String pauseOverlayId = 'pauseMenu';
+
+  static const double maxFrameDt = 0.05;
+  static const double portalWarpDurationSeconds = 1.35;
 
   final int _seed;
 
@@ -76,6 +79,8 @@ class SoulDuskRunGame extends FlameGame {
 
   final Map<GameWorld, _WorldArtBundle> _worldBundles =
       <GameWorld, _WorldArtBundle>{};
+  final Map<GameWorld, Future<_WorldArtBundle>> _worldLoadFutures =
+      <GameWorld, Future<_WorldArtBundle>>{};
 
   ui.Image? soulSprite;
   ui.Image? soulHoverOpenSprite;
@@ -92,6 +97,9 @@ class SoulDuskRunGame extends FlameGame {
   ui.Image? goldenCloudSprite;
   List<ui.Image> runFrames = const [];
 
+  CrystalPortalGate? _activePortal;
+
+  GameWorld _selectedWorld;
   GameWorld _currentWorld;
   RunStage _stage;
   double _introProgress = 0;
@@ -102,16 +110,20 @@ class SoulDuskRunGame extends FlameGame {
   double _distanceSincePortal = 0;
   double _distanceToNextWave = GameConfig.firstWaveDistance;
   double _dashOrbTimer = 0;
-  double _hudNotifyTimer = 0;
   double _cameraLane = GameConfig.initialLane.toDouble();
   double _stumbleTimer = 0;
-  double _portalFlashTimer = 0;
+  double _portalWarpTimer = 0;
   double _portalBannerTimer = 0;
+  double _cameraShakeTimer = 0;
+  double _cameraShakeIntensity = 0;
   bool _ended = false;
+  bool _disposed = false;
   int _runNumber = 0;
+  int _lastHudSignature = -1;
 
   ProgressStore? _progress;
 
+  GameWorld get selectedWorld => _selectedWorld;
   GameWorld get currentWorld => _currentWorld;
   RunStage get stage => _stage;
   bool get isTitleHovering => _stage == RunStage.titleHover;
@@ -128,9 +140,86 @@ class SoulDuskRunGame extends FlameGame {
   double get cameraLane => _cameraLane;
   double get baseSupportElevation => 0.0;
 
-  double get portalFlashProgress =>
-      (_portalFlashTimer / 0.65).clamp(0.0, 1.0).toDouble();
+  // ---- Stage 3 Abyssal Portal & Dimensional Rift State ----
+
+  /// True while an un-crossed Abyssal Portal Gate sits ahead on the causeway.
+  /// While true, the current world's road, curbs, props, and wave spawner
+  /// terminate cleanly at [activePortalCutoffDepth] ("پشتش هیچی نباشد")!
+  bool get hasPendingPortal {
+    final p = _activePortal;
+    return p != null && p.isMounted && !p.hasTriggered;
+  }
+
+  /// Exact depth (`0.02..1.25`) where the current world's road & cliffs end in
+  /// a sheer cosmic abyss right beneath the Portal Gateway, or `null` if no
+  /// un-crossed portal is ahead.
+  double? get activePortalCutoffDepth {
+    final p = _activePortal;
+    if (p == null || !p.isMounted || p.hasTriggered) {
+      return null;
+    }
+    return p.currentDepth.clamp(0.02, 1.25).toDouble();
+  }
+
+  /// Maximum depth (`0.02..1.00`) to render the active stone causeway:
+  ///  * Terminates at the portal threshold while approaching an Abyssal Portal;
+  ///  * Rapidly unfurls from `0.18 -> 1.00` during the first `0.58s` after
+  ///    breaching into a new world so the fresh causeway materializes ahead!
+  double get activeRoadMaxDepth {
+    final cutoff = activePortalCutoffDepth;
+    if (cutoff != null) {
+      return cutoff.clamp(0.02, 1.0).toDouble();
+    }
+    if (isPortalWarping) {
+      final u = portalWarpProgress;
+      if (u < 0.44) {
+        final t = (u / 0.44).clamp(0.0, 1.0).toDouble();
+        final s = t * t * (3.0 - 2.0 * t);
+        return (0.18 + 0.82 * s).clamp(0.18, 1.0).toDouble();
+      }
+    }
+    return 1.0;
+  }
+
+  bool get isPortalWarping => _portalWarpTimer > 0;
+
+  /// Normalized progress (`0.0 -> 1.0`) through the `1.35s` Dimensional Breach
+  /// spectacle after crossing a Portal (`-1.0` when inactive).
+  double get portalWarpProgress => _portalWarpTimer > 0
+      ? (1.0 - _portalWarpTimer / portalWarpDurationSeconds)
+          .clamp(0.0, 1.0)
+          .toDouble()
+      : -1.0;
+
+  double get portalFlashProgress => _portalWarpTimer > 0
+      ? (_portalWarpTimer / portalWarpDurationSeconds)
+          .clamp(0.0, 1.0)
+          .toDouble()
+      : 0.0;
+
   bool get showPortalArrivalBanner => _portalBannerTimer > 0;
+
+  /// Damped screen-space camera impact shake (in logical pixels) for portal
+  /// breaches, cloud-bounces, touchdowns, and stumbles!
+  Offset get cameraShakeOffset {
+    if (_cameraShakeTimer <= 0 || _cameraShakeIntensity <= 0) {
+      return Offset.zero;
+    }
+    final decay = (_cameraShakeTimer / 0.45).clamp(0.0, 1.0).toDouble();
+    final amp = _cameraShakeIntensity * decay * decay;
+    final dx = math.sin(_ambientSeconds * 67.0) * amp;
+    final dy = math.cos(_ambientSeconds * 53.0) * amp * 0.75;
+    return Offset(dx, dy);
+  }
+
+  void triggerCameraShake(double intensity, {double duration = 0.36}) {
+    _cameraShakeIntensity = math.max(_cameraShakeIntensity, intensity);
+    _cameraShakeTimer = math.max(_cameraShakeTimer, duration);
+  }
+
+  ui.Image? backdropForWorld(GameWorld world) => _worldBundles[world]?.backdrop;
+  ui.Image? trackStripForWorld(GameWorld world) =>
+      _worldBundles[world]?.trackStrip;
 
   ui.Image? get worldBackdrop => _worldBundles[_currentWorld]?.backdrop;
   ui.Image? get trackStrip => _worldBundles[_currentWorld]?.trackStrip;
@@ -141,15 +230,11 @@ class SoulDuskRunGame extends FlameGame {
   ui.Image? get floatingIsland => _worldBundles[_currentWorld]?.floatingIsland;
   ui.Image? get cliffSide => _worldBundles[_currentWorld]?.cliffSide;
 
-  /// Smooth camera blend (`1.0` on Sky-High Main Screen -> `0.0` in close
-  /// over-the-shoulder chase view behind Soul!).
   double get introCameraBlend {
     switch (_stage) {
       case RunStage.titleHover:
         return 1.0;
       case RunStage.introFlight:
-        // Hold sky camera briefly for Soul's serene eye-close & start of 180°
-        // spin (`0.00..0.18`), then swoop down smoothly (`0.18..0.88`)!
         final u =
             ((_introProgress - 0.18) / 0.70).clamp(0.0, 1.0).toDouble();
         final s = u * u * (3.0 - 2.0 * u);
@@ -169,10 +254,22 @@ class SoulDuskRunGame extends FlameGame {
         final smooth = u * u * (3.0 - 2.0 * u);
         return GameConfig.startSpeed * (0.12 + 0.88 * smooth);
       case RunStage.running:
-        final base = difficulty.speedAt(_elapsedSeconds);
-        return powerUps.isSolarDashing
-            ? base * GameConfig.solarDashSpeedBoost
-            : base;
+        var base = difficulty.speedAt(_elapsedSeconds);
+        if (powerUps.isSolarDashing) {
+          base *= GameConfig.solarDashSpeedBoost;
+        }
+        // Stage 3 Dimensional Breach Slingshot Curve: brief impact beat (`0.78x`)
+        // followed by exhilarating `1.32x` warp burst into the new realm!
+        if (isPortalWarping) {
+          final u = portalWarpProgress;
+          if (u < 0.12) {
+            base *= 0.78 + 0.22 * (u / 0.12);
+          } else if (u < 0.65) {
+            final bell = math.sin(((u - 0.12) / 0.53) * math.pi);
+            base *= 1.0 + 0.32 * bell;
+          }
+        }
+        return base;
     }
   }
 
@@ -210,30 +307,44 @@ class SoulDuskRunGame extends FlameGame {
       (_stage == RunStage.introFlight && _introProgress >= 0.80);
 
   // ---------------------------------------------------------------
-  // S20 Closer, Lower Over-the-Shoulder `4.15x` 3D Chase Camera
+  // Non-Freezing `1/Z` 3D Perspective Camera + Warp FOV Surge
   // ---------------------------------------------------------------
 
-  double get horizonY =>
-      size.y *
-      (GameConfig.horizonRatio +
-          GameConfig.titleHorizonLiftRatio * introCameraBlend);
+  double get horizonY {
+    final warpDip = isPortalWarping
+        ? -math.sin(portalWarpProgress * math.pi) * size.y * 0.028
+        : 0.0;
+    return size.y *
+            (GameConfig.horizonRatio +
+                GameConfig.titleHorizonLiftRatio * introCameraBlend) +
+        warpDip +
+        cameraShakeOffset.dy;
+  }
 
   double get playerPlaneY =>
-      size.y * (GameConfig.playerPlaneRatio + 0.06 * introCameraBlend);
+      size.y * (GameConfig.playerPlaneRatio + 0.06 * introCameraBlend) +
+      cameraShakeOffset.dy * 0.55;
 
   double get roadCurveFactor {
     if (_stage != RunStage.running) {
       return 0.0;
     }
-    return math.sin(_travelled * 0.00135) * 0.65 +
-        math.sin(_travelled * 0.00055) * 0.35;
+    // Straighten road gently when approaching the Abyssal Portal so the cliff
+    // termination & grand gateway frame heroically center-screen!
+    final cutoff = activePortalCutoffDepth;
+    final portalStraighten = cutoff != null
+        ? (cutoff / 0.85).clamp(0.15, 1.0).toDouble()
+        : 1.0;
+    return (math.sin(_travelled * 0.00135) * 0.65 +
+            math.sin(_travelled * 0.00055) * 0.35) *
+        portalStraighten;
   }
 
   double curveOffsetForDepth(double depth) {
     if (depth <= 0.0) {
       return 0.0;
     }
-    final d = depth.clamp(0.0, 1.15).toDouble();
+    final d = depth.clamp(0.0, 1.35).toDouble();
     return roadCurveFactor * (d * d) * size.x * GameConfig.roadCurveRatio;
   }
 
@@ -246,7 +357,7 @@ class SoulDuskRunGame extends FlameGame {
 
   double perspectiveFactor(double depth) {
     final z = (1.0 + depth * (GameConfig.farDepthRatio - 1.0))
-        .clamp(0.42, 8.5)
+        .clamp(0.16, 12.0)
         .toDouble();
     return 1.0 / z;
   }
@@ -255,7 +366,7 @@ class SoulDuskRunGame extends FlameGame {
     final span = math.max(1.0, playerPlaneY - horizonY);
     const pFar = GameConfig.farScale;
     final t = (y - horizonY) / span;
-    final p = (pFar + t * (1.0 - pFar)).clamp(0.118, 2.38).toDouble();
+    final p = (pFar + t * (1.0 - pFar)).clamp(0.085, 6.25).toDouble();
     final z = 1.0 / p;
     return (z - 1.0) / (GameConfig.farDepthRatio - 1.0);
   }
@@ -279,6 +390,7 @@ class SoulDuskRunGame extends FlameGame {
     final center = (GameConfig.laneCount - 1) / 2;
     final camOffset = (_cameraLane - center) * GameConfig.cameraFollowRatio;
     return size.x / 2 +
+        cameraShakeOffset.dx +
         curveOffsetForDepth(depth) -
         camOffset * halfWidthForDepth(depth) * GameConfig.laneSpreadRatio;
   }
@@ -297,10 +409,20 @@ class SoulDuskRunGame extends FlameGame {
   // --------------------------------------------------------------- lifecycle
 
   @override
+  void updateTree(double dt) {
+    final clampedDt = dt.clamp(0.0, maxFrameDt).toDouble();
+    super.updateTree(clampedDt);
+  }
+
+  @override
   Future<void> onLoad() async {
     await super.onLoad();
     _generator = SeededObstacleGenerator(seed: _seed);
-    unawaited(ProgressStore.load().then((store) => _progress = store));
+    unawaited(ProgressStore.load().then((store) {
+      if (!_disposed) {
+        _progress = store;
+      }
+    }));
     unawaited(_preloadArt());
 
     add(TrackScene());
@@ -311,7 +433,22 @@ class SoulDuskRunGame extends FlameGame {
     }
   }
 
+  @override
+  void onRemove() {
+    _disposed = true;
+    _activePortal = null;
+    _worldBundles.clear();
+    _worldLoadFutures.clear();
+    soulSprite?.dispose();
+    soulSprite = null;
+    images.clearCache();
+    super.onRemove();
+  }
+
   Future<ui.Image?> _tryLoadImage(String key, String label) async {
+    if (_disposed) {
+      return null;
+    }
     try {
       return await images.load(key);
     } catch (error) {
@@ -320,45 +457,53 @@ class SoulDuskRunGame extends FlameGame {
     }
   }
 
-  Future<_WorldArtBundle> _loadWorldBundle(GameWorld world) async {
-    final bundle = _WorldArtBundle();
-    bundle.backdrop = await _tryLoadImage(
-      GameConfig.backdropKeyFor(world),
-      'Sky atmosphere dome ($world)',
-    );
-    final trackKey = GameConfig.trackStripKeyFor(world);
-    bundle.trackStrip = trackKey == null
-        ? null
-        : await _tryLoadImage(trackKey, 'Track strip ($world)');
-    bundle.valleyFloor = await _tryLoadImage(
-      GameConfig.valleyFloorKeyFor(world),
-      '3D valley/water floor ($world)',
-    );
-    bundle.canyonWall = await _tryLoadImage(
-      GameConfig.canyonWallKeyFor(world),
-      '3D canyon cliff wall ($world)',
-    );
-    bundle.skyCitadel = await _tryLoadImage(
-      GameConfig.skyCitadelKeyFor(world),
-      '3D levitating sky citadel ($world)',
-    );
-    bundle.corridorPillar = await _tryLoadImage(
-      GameConfig.corridorPillarKeyFor(world),
-      'Parapet lantern ($world)',
-    );
-    bundle.floatingIsland = await _tryLoadImage(
-      GameConfig.floatingIslandKeyFor(world),
-      'Floating valley island ($world)',
-    );
-    bundle.cliffSide = await _tryLoadImage(
-      GameConfig.cliffSideKeyFor(world),
-      'Bridge-edge flora & crystals ($world)',
-    );
-    return bundle;
+  Future<_WorldArtBundle> _ensureWorldBundle(GameWorld world) {
+    final existing = _worldBundles[world];
+    if (existing != null) {
+      return Future<_WorldArtBundle>.value(existing);
+    }
+    return _worldLoadFutures.putIfAbsent(world, () async {
+      final bundle = _WorldArtBundle();
+      bundle.backdrop = await _tryLoadImage(
+        GameConfig.backdropKeyFor(world),
+        'Sky atmosphere dome ($world)',
+      );
+      final trackKey = GameConfig.trackStripKeyFor(world);
+      bundle.trackStrip = trackKey == null
+          ? null
+          : await _tryLoadImage(trackKey, 'Track strip ($world)');
+      bundle.valleyFloor = await _tryLoadImage(
+        GameConfig.valleyFloorKeyFor(world),
+        '3D valley/water floor ($world)',
+      );
+      bundle.canyonWall = await _tryLoadImage(
+        GameConfig.canyonWallKeyFor(world),
+        '3D canyon cliff wall ($world)',
+      );
+      bundle.skyCitadel = await _tryLoadImage(
+        GameConfig.skyCitadelKeyFor(world),
+        '3D levitating sky citadel ($world)',
+      );
+      bundle.corridorPillar = await _tryLoadImage(
+        GameConfig.corridorPillarKeyFor(world),
+        'Parapet lantern ($world)',
+      );
+      bundle.floatingIsland = await _tryLoadImage(
+        GameConfig.floatingIslandKeyFor(world),
+        'Floating valley island ($world)',
+      );
+      bundle.cliffSide = await _tryLoadImage(
+        GameConfig.cliffSideKeyFor(world),
+        'Bridge-edge flora & crystals ($world)',
+      );
+      if (!_disposed) {
+        _worldBundles[world] = bundle;
+      }
+      return bundle;
+    });
   }
 
   Future<void> _preloadArt() async {
-    // 1. Load close-up Main Screen Soul sprites & active world bundle FIRST!
     soulHoverOpenSprite = await _tryLoadImage(
       GameConfig.soulHoverOpenSpriteKey,
       'Soul close-up hover open-eyes',
@@ -367,14 +512,14 @@ class SoulDuskRunGame extends FlameGame {
       GameConfig.soulHoverBlinkSpriteKey,
       'Soul close-up hover blink-eyes',
     );
-    _worldBundles[selectedWorld] = await _loadWorldBundle(selectedWorld);
-
-    try {
-      soulSprite = await loadKeyedSprite(GameConfig.soulSpriteAsset);
-    } catch (error) {
-      debugPrint('Soul sprite unavailable ($error). Using fallback.');
-      soulSprite = null;
+    if (_disposed) {
+      return;
     }
+    await _ensureWorldBundle(_selectedWorld);
+    if (_disposed) {
+      return;
+    }
+
     soulJumpSprite =
         await _tryLoadImage(GameConfig.soulJumpSpriteKey, 'Soul jump pose');
     soulSlideSprite =
@@ -408,25 +553,81 @@ class SoulDuskRunGame extends FlameGame {
     );
     orbSprite = await _tryLoadImage(GameConfig.orbSpriteAsset, 'Energy orb');
 
+    if (_disposed) {
+      return;
+    }
+
     try {
       final loaded = <ui.Image>[];
       for (var i = 1; i <= GameConfig.runFrameCount; i++) {
+        if (_disposed) {
+          return;
+        }
         final index = i.toString().padLeft(2, '0');
         loaded.add(
           await images.load('${GameConfig.runFramesPrefix}$index.png'),
         );
+        if (i % 6 == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
       }
-      runFrames = loaded;
+      if (!_disposed) {
+        runFrames = loaded;
+      }
     } catch (error) {
-      debugPrint('Run-cycle frames unavailable ($error). Using fallback.');
+      debugPrint('Run-cycle frames unavailable ($error). Loading fallback.');
       runFrames = const [];
+      if (!_disposed) {
+        try {
+          soulSprite = await loadKeyedSprite(GameConfig.soulSpriteAsset);
+        } catch (_) {
+          soulSprite = null;
+        }
+      }
     }
 
-    // 2. Warm-cache remaining worlds so Crystal Portal transitions have 0ms hitch!
-    for (final world in GameWorld.values) {
-      if (!_worldBundles.containsKey(world)) {
-        _worldBundles[world] = await _loadWorldBundle(world);
-      }
+    final nextWorld = GameConfig.nextWorldAfter(_currentWorld);
+    if (!_disposed) {
+      await Future<void>.delayed(Duration.zero);
+      await _ensureWorldBundle(nextWorld);
+    }
+  }
+
+  Future<void> selectWorld(GameWorld world) async {
+    _selectedWorld = world;
+    await _ensureWorldBundle(world);
+    if (_disposed) {
+      return;
+    }
+    returnToTitleHover();
+    final nextWorld = GameConfig.nextWorldAfter(world);
+    unawaited(_ensureWorldBundle(nextWorld));
+  }
+
+  int _computeHudSignature() {
+    return Object.hash(
+      _stage,
+      _ended,
+      _currentWorld,
+      showPortalArrivalBanner,
+      score.totalScore,
+      score.orbsCollected,
+      powerUps.hasShield,
+      powerUps.canActivateShield,
+      powerUps.shieldRemaining.ceil(),
+      powerUps.shieldCooldownRemaining.ceil(),
+      powerUps.isSolarDashing ? powerUps.dashRemaining.ceil() : 0,
+      powerUps.hasSuperSneakers ? powerUps.sneakersRemaining.ceil() : 0,
+      powerUps.hasMagnet ? powerUps.magnetRemaining.ceil() : 0,
+      powerUps.hasMultiplier ? powerUps.multiplierRemaining.ceil() : 0,
+    );
+  }
+
+  void _notifyHudIfChanged({bool force = false}) {
+    final sig = _computeHudSignature();
+    if (force || sig != _lastHudSignature) {
+      _lastHudSignature = sig;
+      hudTick.value += 1;
     }
   }
 
@@ -443,13 +644,20 @@ class SoulDuskRunGame extends FlameGame {
 
     _ambientSeconds += dt;
 
-    if (_portalFlashTimer > 0) {
-      _portalFlashTimer = math.max(0.0, _portalFlashTimer - dt);
+    if (_cameraShakeTimer > 0) {
+      _cameraShakeTimer = math.max(0.0, _cameraShakeTimer - dt);
+      if (_cameraShakeTimer <= 0) {
+        _cameraShakeIntensity = 0;
+      }
+    }
+
+    if (_portalWarpTimer > 0) {
+      _portalWarpTimer = math.max(0.0, _portalWarpTimer - dt);
     }
     if (_portalBannerTimer > 0) {
       _portalBannerTimer = math.max(0.0, _portalBannerTimer - dt);
       if (_portalBannerTimer <= 0) {
-        hudTick.value += 1;
+        _notifyHudIfChanged(force: true);
       }
     }
 
@@ -465,6 +673,7 @@ class SoulDuskRunGame extends FlameGame {
       if (_introProgress >= 1.0) {
         _introProgress = 1.0;
         _stage = RunStage.running;
+        triggerCameraShake(3.8, duration: 0.24);
         if (player.isMounted) {
           player.onIntroTouchdown();
           final landingPos = Vector2(
@@ -474,7 +683,7 @@ class SoulDuskRunGame extends FlameGame {
           add(VfxBurst.jumpRipple(landingPos));
           add(VfxBurst.orbCollect(landingPos));
         }
-        hudTick.value += 1;
+        _notifyHudIfChanged(force: true);
       }
       return;
     }
@@ -490,16 +699,23 @@ class SoulDuskRunGame extends FlameGame {
 
     final ds = currentSpeed * dt;
     _travelled += ds;
-    _distanceSinceWave += ds;
-    _distanceSincePortal += ds;
 
-    if (powerUps.isSolarDashing) {
+    // Freeze wave & portal distance accumulation while an Abyssal Portal sits
+    // ahead so NOTHING ever spawns behind the end-of-world portal threshold!
+    if (!hasPendingPortal) {
+      _distanceSinceWave += ds;
+      if (!isPortalWarping) {
+        _distanceSincePortal += ds;
+      }
+    }
+
+    if (powerUps.isSolarDashing && !hasPendingPortal) {
       _dashOrbTimer += dt;
       if (_dashOrbTimer >= 0.17) {
         _dashOrbTimer = 0;
         add(EnergyOrb(
           lane: laneSystem.lane,
-          initialDepth: 1.0,
+          initialDepth: 1.18,
           elevation: 1.38,
         ));
       }
@@ -507,23 +723,16 @@ class SoulDuskRunGame extends FlameGame {
       _dashOrbTimer = 0;
     }
 
-    if (_distanceSinceWave >= _distanceToNextWave) {
+    if (!hasPendingPortal && _distanceSinceWave >= _distanceToNextWave) {
       _spawnWave();
     }
 
     score.addDistance(ds, multiplier: powerUps.scoreMultiplier);
-
-    _hudNotifyTimer += dt;
-    if (_hudNotifyTimer >= 0.08) {
-      _hudNotifyTimer = 0;
-      hudTick.value += 1;
-    }
+    _notifyHudIfChanged();
   }
 
   // --------------------------------------------------------------- gameplay
 
-  /// Tapping directly on Soul OR clicking START launches Soul's 4-phase
-  /// serene blink -> 180° spin -> golden comet dive -> low stone-slab glide!
   void startRun() {
     if (_stage != RunStage.titleHover || _ended || paused) {
       return;
@@ -535,64 +744,73 @@ class SoulDuskRunGame extends FlameGame {
       final skyBurstPos = Vector2(size.x * 0.35, size.y * 0.43);
       add(VfxBurst.shieldShatter(skyBurstPos));
     }
-    hudTick.value += 1;
+    _notifyHudIfChanged(force: true);
   }
 
-  /// Pre-populates the 3D stone causeway ahead with welcoming Sun-Energy Orbs,
-  /// a Golden Dawn Bounce-Cloud, and an early Soul Light Blessing so the
-  /// low-angle 3D vista is immediately rich and alive from touchdown!
   void _seedInitialVistaElements() {
     const ribbonLanes = [1, 1, 2, 2, 1, 0, 0, 1];
     for (var i = 0; i < ribbonLanes.length; i++) {
       add(EnergyOrb(
         lane: ribbonLanes[i],
-        initialDepth: 0.56 + i * 0.06,
+        initialDepth: 0.60 + i * 0.06,
+        fadeInSeconds: 0.36 + i * 0.03,
       ));
     }
 
-    // Golden Dawn Bounce-Cloud (`isGoldenBounceCloud`, 100% beneficial sky-arc!)
     add(Obstacle(
       lane: 2,
       kind: ObstacleKind.trainWithRamp,
-      initialDepth: 0.82,
+      initialDepth: 0.86,
+      fadeInSeconds: 0.42,
     ));
     for (var k = 0; k < 4; k++) {
       final u = (k + 0.5) / 4;
       add(EnergyOrb(
         lane: 2,
-        initialDepth: 0.87 + k * 0.045,
+        initialDepth: 0.91 + k * 0.045,
         elevation: math.sin(u * math.pi) * 1.25,
+        fadeInSeconds: 0.44,
       ));
     }
 
-    // Early gleaming Soul Light Blessing pickup on the opposite lane!
     add(PowerUpPickup(
       lane: 0,
       kind: PowerUpKind.magnet,
-      initialDepth: 0.98,
+      initialDepth: 1.04,
+      fadeInSeconds: 0.45,
     ));
   }
 
-  /// Triggered when Soul sprints through a 3D `CrystalPortalGate` (`06-22-22`
-  /// -> `06-22-29`), transforming the surrounding biome on the fly!
+  /// Triggered at the exact instant Soul leaps across the Abyssal Portal
+  /// threshold: shatters the dimensional barrier, shakes the camera, launches
+  /// the `1.35s` Hyperspace Rift Vortex, and unfurls the new world's causeway!
   void enterCrystalPortal(GameWorld nextWorld) {
     if (_ended) {
       return;
     }
     _currentWorld = nextWorld;
-    _portalFlashTimer = 0.65;
-    _portalBannerTimer = 2.6;
+    unawaited(_ensureWorldBundle(nextWorld));
+    unawaited(_ensureWorldBundle(GameConfig.nextWorldAfter(nextWorld)));
+
+    _portalWarpTimer = portalWarpDurationSeconds;
+    _portalBannerTimer = 3.2;
+    _distanceSinceWave = 0;
+    _distanceToNextWave = 360;
+    triggerCameraShake(8.5, duration: 0.44);
+
     for (final obs in children.whereType<Obstacle>().toList()) {
-      if (!obs.isGoldenBounceCloud && obs.frontDepth <= 0.24) {
-        obs.removeFromParent();
+      if (!obs.isGoldenBounceCloud) {
+        obs.dissolveOut();
       }
     }
     if (player.isMounted) {
-      final burstPos = Vector2(player.position.x, playerPlaneY - size.y * 0.06);
+      final burstPos = Vector2(player.position.x, playerPlaneY - size.y * 0.08);
       add(VfxBurst.shieldShatter(burstPos));
-      add(VfxBurst.jumpRipple(burstPos));
+      add(VfxBurst.jumpRipple(
+        Vector2(player.position.x, playerPlaneY + player.size.y * 0.22),
+      ));
     }
-    hudTick.value += 1;
+    _notifyHudIfChanged(force: true);
   }
 
   void moveLane(int direction) {
@@ -625,8 +843,9 @@ class SoulDuskRunGame extends FlameGame {
       return;
     }
     verticalMotion.bounce();
+    triggerCameraShake(4.2, duration: 0.24);
     add(VfxBurst.shieldShatter(cloudCenter));
-    hudTick.value += 1;
+    _notifyHudIfChanged();
   }
 
   void slide() {
@@ -645,8 +864,9 @@ class SoulDuskRunGame extends FlameGame {
     }
     final activated = powerUps.activateShield();
     if (activated) {
+      triggerCameraShake(3.2, duration: 0.20);
       add(VfxBurst.shieldShatter(player.position.clone()));
-      hudTick.value += 1;
+      _notifyHudIfChanged(force: true);
     }
     return activated;
   }
@@ -655,15 +875,21 @@ class SoulDuskRunGame extends FlameGame {
     if (_ended) {
       return false;
     }
+    // Dimensional breach rush grants brief Rift Invulnerability!
+    if (isPortalWarping && portalWarpProgress < 0.72) {
+      add(VfxBurst.shieldShatter(impactCenter));
+      return true;
+    }
     if (powerUps.consumeShieldOnHit()) {
       _stumbleTimer = 0;
+      triggerCameraShake(6.5, duration: 0.32);
       for (final obs in children.whereType<Obstacle>().toList()) {
         if (!obs.isGoldenBounceCloud && obs.frontDepth <= 0.28) {
-          obs.removeFromParent();
+          obs.dissolveOut();
         }
       }
       add(VfxBurst.shieldShatter(impactCenter));
-      hudTick.value += 1;
+      _notifyHudIfChanged(force: true);
       return true;
     }
     onPlayerHit();
@@ -674,14 +900,18 @@ class SoulDuskRunGame extends FlameGame {
     if (_ended) {
       return;
     }
+    if (isPortalWarping && portalWarpProgress < 0.72) {
+      return;
+    }
     if (_stumbleTimer > 0) {
       onObstacleImpact(contactPoint);
       return;
     }
     laneSystem.bounceFromBlockedLane(blockedLane);
     _stumbleTimer = GameConfig.stumbleRecoverySeconds;
+    triggerCameraShake(5.0, duration: 0.28);
     add(VfxBurst.orbCollect(contactPoint));
-    hudTick.value += 1;
+    _notifyHudIfChanged();
   }
 
   void onNearMissSpark(Vector2 grazePoint) {
@@ -697,7 +927,7 @@ class SoulDuskRunGame extends FlameGame {
     }
     _ended = true;
     unawaited(_progress?.addSuns(score.orbsCollected) ?? Future.value());
-    hudTick.value += 1;
+    _notifyHudIfChanged(force: true);
     pauseEngine();
     overlays.add(gameOverOverlayId);
   }
@@ -710,7 +940,7 @@ class SoulDuskRunGame extends FlameGame {
     if (position != null) {
       add(VfxBurst.orbCollect(position));
     }
-    hudTick.value += 1;
+    _notifyHudIfChanged();
   }
 
   void onPowerUpCollected(PowerUpKind kind, Vector2 position) {
@@ -719,26 +949,38 @@ class SoulDuskRunGame extends FlameGame {
     }
     powerUps.activate(kind);
     add(VfxBurst.shieldShatter(position));
-    hudTick.value += 1;
+    _notifyHudIfChanged(force: true);
   }
 
   void _spawnWave() {
-    // Spawn a majestic 3D Crystal Portal Gateway every `portalIntervalDistance`!
+    // Stage 3 Abyssal Portal Spawn: terminates the current world at `portalDepth`
+    // and freezes all subsequent wave spawns until Soul breaches into `targetBiome`!
     if (_distanceSincePortal >= GameConfig.portalIntervalDistance) {
       _distanceSincePortal = 0;
       _distanceSinceWave = 0;
       _distanceToNextWave = 420;
 
       final targetBiome = GameConfig.nextWorldAfter(_currentWorld);
-      add(CrystalPortalGate(targetWorld: targetBiome, initialDepth: 1.06));
+      unawaited(_ensureWorldBundle(targetBiome));
+
+      const portalDepth = 1.22;
+      final gate = CrystalPortalGate(
+        targetWorld: targetBiome,
+        initialDepth: portalDepth,
+      );
+      _activePortal = gate;
+      add(gate);
+
+      // Guiding golden sun-orb runway strictly IN FRONT of the portal threshold
+      // (`0.84..1.12 < 1.22` — ZERO items behind the portal!)
       for (var i = 0; i < 6; i++) {
         add(EnergyOrb(
           lane: 1,
-          initialDepth: 0.88 + i * 0.045,
+          initialDepth: 0.84 + i * 0.052,
         ));
       }
-      add(EnergyOrb(lane: 0, initialDepth: 0.96));
-      add(EnergyOrb(lane: 2, initialDepth: 0.96));
+      add(EnergyOrb(lane: 0, initialDepth: 1.04));
+      add(EnergyOrb(lane: 2, initialDepth: 1.04));
       return;
     }
 
@@ -749,7 +991,7 @@ class SoulDuskRunGame extends FlameGame {
     _distanceSinceWave = 0;
     _distanceToNextWave = wave.distanceToNext;
 
-    const waveCoreDepth = 1.06;
+    const waveCoreDepth = 1.18;
     if (!powerUps.isSolarDashing) {
       for (final lane in wave.blockedLanes) {
         add(Obstacle(
@@ -769,7 +1011,7 @@ class SoulDuskRunGame extends FlameGame {
             (slalom != null && i < slalom.length) ? slalom[i] : orbLane;
         add(EnergyOrb(
           lane: itemLane,
-          initialDepth: 0.94 + i * 0.048,
+          initialDepth: 1.06 + i * 0.048,
         ));
       }
     }
@@ -779,7 +1021,7 @@ class SoulDuskRunGame extends FlameGame {
       for (var i = 0; i < 3; i++) {
         add(EnergyOrb(
           lane: bonusLane,
-          initialDepth: 1.00 + i * 0.052,
+          initialDepth: 1.12 + i * 0.052,
         ));
       }
     }
@@ -791,7 +1033,7 @@ class SoulDuskRunGame extends FlameGame {
         final t = i / (arcCount - 1);
         add(EnergyOrb(
           lane: arcLane,
-          initialDepth: 0.99 + i * 0.036,
+          initialDepth: 1.11 + i * 0.036,
           elevation: math.sin(t * math.pi) * 0.96,
         ));
       }
@@ -803,7 +1045,7 @@ class SoulDuskRunGame extends FlameGame {
       for (var i = 0; i < tunnelOrbs; i++) {
         add(EnergyOrb(
           lane: slideLane,
-          initialDepth: 1.01 + i * 0.038,
+          initialDepth: 1.13 + i * 0.038,
           elevation: 0.0,
         ));
       }
@@ -826,7 +1068,7 @@ class SoulDuskRunGame extends FlameGame {
       add(PowerUpPickup(
         lane: wave.powerUpLane!,
         kind: wave.powerUpKind!,
-        initialDepth: 1.12,
+        initialDepth: 1.24,
       ));
     }
   }
@@ -858,6 +1100,7 @@ class SoulDuskRunGame extends FlameGame {
   // --------------------------------------------------------------- replay
 
   void _clearWorldEntities() {
+    _activePortal = null;
     for (final c in children.whereType<Obstacle>().toList()) {
       c.removeFromParent();
     }
@@ -878,9 +1121,11 @@ class SoulDuskRunGame extends FlameGame {
     verticalMotion.reset();
     powerUps.reset();
     score.reset();
-    player.reset();
+    if (player.isMounted) {
+      player.reset();
+    }
 
-    _currentWorld = selectedWorld;
+    _currentWorld = _selectedWorld;
     _elapsedSeconds = 0;
     _travelled = 0;
     _distanceSinceWave = 0;
@@ -889,13 +1134,13 @@ class SoulDuskRunGame extends FlameGame {
     _dashOrbTimer = 0;
     _cameraLane = GameConfig.initialLane.toDouble();
     _stumbleTimer = 0;
-    _portalFlashTimer = 0;
+    _portalWarpTimer = 0;
     _portalBannerTimer = 0;
+    _cameraShakeTimer = 0;
+    _cameraShakeIntensity = 0;
     _ended = false;
   }
 
-  /// PLAY AGAIN: resets and immediately launches Soul's sky-flight dive onto
-  /// the stone bridge!
   void resetRun() {
     _runNumber += 1;
     _generator = SeededObstacleGenerator(seed: _seed + _runNumber);
@@ -910,11 +1155,9 @@ class SoulDuskRunGame extends FlameGame {
     if (paused) {
       resumeEngine();
     }
-    hudTick.value += 1;
+    _notifyHudIfChanged(force: true);
   }
 
-  /// Returns cleanly to the Living 3D Main Screen (`RunStage.titleHover`) with
-  /// close-up Soul hovering alive in the sky!
   void returnToTitleHover() {
     _runNumber += 1;
     _generator = SeededObstacleGenerator(seed: _seed + _runNumber);
@@ -928,6 +1171,6 @@ class SoulDuskRunGame extends FlameGame {
     if (paused) {
       resumeEngine();
     }
-    hudTick.value += 1;
+    _notifyHudIfChanged(force: true);
   }
 }

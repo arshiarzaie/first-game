@@ -20,9 +20,10 @@ class GameConfig {
   // ---- World geometry & Crystal Portal biome gateways ----
   static const double trackLength = 960;
 
-  /// Distance between in-run 3D Crystal Portal Gateways (`06-22-22.png` ->
-  /// `06-22-29.png`) that seamlessly transition into the next biome!
-  static const double portalIntervalDistance = 4600;
+  /// Distance between in-run 3D Abyssal Crystal Portal Gateways (`3200` world
+  /// units ≈ `9.5s` of running) where the current causeway terminates at the
+  /// void and warps dramatically into the next biome!
+  static const double portalIntervalDistance = 3200;
 
   /// Normalized clearance threshold to soar cleanly above Dark Storm Clouds.
   static const double stormCloudClearElevation = 0.88;
@@ -45,11 +46,11 @@ class GameConfig {
   static const double scorePerWorldUnit = 0.025;
   static const int orbScore = 10;
 
-  // ---- S22 Monumental Wide 3-Lane Causeway & Balanced Low Hero Camera ----
-  // Widened playfield ground (+34.5% width) + 40% longer runway sightline
-  // (`0.410 * h`) + broader horizon perspective (`farDepthRatio = 3.45`) so
-  // the 3-lane stone causeway feels massive and spacious around Soul!
-  static const double farDepthRatio = 3.45;
+  // ---- S23 Zero-Pop Deep Vanishing Horizon & Wide 3-Lane Causeway ----
+  // `farDepthRatio = 5.20` tapers distant horizon elements down to `19.2%`
+  // scale (and `15.8%` at `depth = 1.25` emergence) while preserving 100% of
+  // S22's wide `0.585` near causeway and `0.410 * h` visible runway!
+  static const double farDepthRatio = 5.20;
   static const double horizonRatio = 0.445;
   static const double playerPlaneRatio = 0.855;
   static const double farScale = 1.0 / farDepthRatio;
@@ -332,12 +333,12 @@ class GameConfig {
   static const double playerBobRatio = 0.024;
   static const double playerLeanAngle = 0.16;
 
-  // ---- S22 24-Frame Athletic Pixar-3D Soul Run-Cycle ----
+  // ---- S23 24-Frame Pixar-Chibi 3D Soul Run-Cycle ----
   static const String runFramesPrefix = 'soul/run/frame_';
   static const int runFrameCount = 24;
   static const double runCycleFps = 29.0;
   static const int runIdleFrame = 1;
-  static const double runCycleFitBoost = 1.14;
+  static const double runCycleFitBoost = 1.18;
 }
 
 enum GameWorld { duskHollow, moonveilMarsh, emberfallCanyon }

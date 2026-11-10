@@ -90,9 +90,11 @@ void main() {
     expect(GameConfig.runFrameCount, equals(24));
     expect(GameConfig.runCycleFps, greaterThanOrEqualTo(24.0));
 
-    // Grand 3-lane causeway is wide (>= 1.10 * screenWidth at player plane)
-    // and offers >= 0.38 * screenHeight visible runway ahead of Soul!
+    // Grand 3-lane causeway is wide (>= 1.10 * screenWidth at player plane),
+    // offers >= 0.38 * screenHeight visible runway, and uses a deep vanishing
+    // horizon (>= 5.0x) so distant objects emerge small without popping in!
     expect(GameConfig.trackBottomHalfWidthRatio, greaterThanOrEqualTo(0.55));
+    expect(GameConfig.farDepthRatio, greaterThanOrEqualTo(5.0));
     final runwaySpan = GameConfig.playerPlaneRatio - GameConfig.horizonRatio;
     expect(runwaySpan, greaterThanOrEqualTo(0.38));
     expect(GameConfig.horizonRatio, inInclusiveRange(0.40, 0.50));

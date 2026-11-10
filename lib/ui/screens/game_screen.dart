@@ -98,12 +98,13 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       return;
     }
     if (chosen != null && chosen != _activeWorld) {
-      final oldNotifier = _game.hudTick;
+      await _game.selectWorld(chosen);
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _activeWorld = chosen;
-        _initGame(startInTitleHover: true);
       });
-      oldNotifier.dispose();
     } else if (!_game.isEnded) {
       _game.resumeEngine();
     }
@@ -117,6 +118,28 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
         return 'MOONVEIL MARSH';
       case GameWorld.emberfallCanyon:
         return 'EMBERFALL CANYON';
+    }
+  }
+
+  static String _worldSubtitle(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return 'CAUSEWAY OF TWILIGHT ECHOES';
+      case GameWorld.moonveilMarsh:
+        return 'SANCTUARY OF LUMINOUS TIDES';
+      case GameWorld.emberfallCanyon:
+        return 'CITADEL OF SOLAR EMBERS';
+    }
+  }
+
+  static Color _worldAccentColor(GameWorld world) {
+    switch (world) {
+      case GameWorld.duskHollow:
+        return const Color(0xFFFFB88C);
+      case GameWorld.moonveilMarsh:
+        return const Color(0xFF64FAF0);
+      case GameWorld.emberfallCanyon:
+        return const Color(0xFFFFCA62);
     }
   }
 
@@ -172,7 +195,6 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   _gestures.onPointerCancel(event.pointer);
                 },
                 child: GameWidget<SoulDuskRunGame>(
-                  key: ValueKey<GameWorld>(_activeWorld),
                   game: _game,
                   errorBuilder: (context, error) => Material(
                     color: const Color(0xFF1E1633),
@@ -253,33 +275,72 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                               ),
                               if (_game.showPortalArrivalBanner)
                                 Positioned(
-                                  top: topPad + 64,
-                                  left: 0,
-                                  right: 0,
+                                  top: topPad + 66,
+                                  left: 18,
+                                  right: 18,
                                   child: IgnorePointer(
                                     child: Center(
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 6,
+                                          horizontal: 22,
+                                          vertical: 10,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xBB18243E),
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              Color(0xD8100C28),
+                                              Color(0xEC1E1642),
+                                              Color(0xD8100C28),
+                                            ],
+                                          ),
                                           borderRadius:
-                                              BorderRadius.circular(18),
+                                              BorderRadius.circular(22),
                                           border: Border.all(
-                                            color: const Color(0xAA7AF6FF),
-                                            width: 1.3,
+                                            color: _worldAccentColor(
+                                              _game.currentWorld,
+                                            ).withValues(alpha: 0.88),
+                                            width: 1.6,
                                           ),
                                         ),
-                                        child: Text(
-                                          _worldDisplayName(_game.currentWorld),
-                                          style: const TextStyle(
-                                            color: Color(0xFFE6FFFF),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: 2.6,
-                                          ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              '◆  REALM BREACHED  ◆',
+                                              style: TextStyle(
+                                                color: _worldAccentColor(
+                                                  _game.currentWorld,
+                                                ),
+                                                fontSize: 9.5,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 2.8,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              _worldDisplayName(
+                                                _game.currentWorld,
+                                              ),
+                                              style: const TextStyle(
+                                                color: Color(0xFFFFFBF2),
+                                                fontSize: 16.5,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: 3.1,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              _worldSubtitle(
+                                                _game.currentWorld,
+                                              ),
+                                              style: const TextStyle(
+                                                color: Color(0xCCDAE6F6),
+                                                fontSize: 9.0,
+                                                fontWeight: FontWeight.w600,
+                                                letterSpacing: 1.9,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),

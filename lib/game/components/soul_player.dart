@@ -376,12 +376,20 @@ class SoulPlayer extends PositionComponent
       canvas.drawPath(
         path,
         Paint()
-          ..color = const Color(0xFFFFB23E)
-              .withValues(alpha: (0.34 - r * 0.05) * alpha)
+          ..color = const Color(0xFFFFA832)
+              .withValues(alpha: (0.14 - r * 0.02) * alpha)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = heroD * (0.065 - r * 0.010)
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0),
+          ..strokeWidth = heroD * (0.095 - r * 0.014)
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = const Color(0xFFFFBC48)
+              .withValues(alpha: (0.30 - r * 0.04) * alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = heroD * (0.052 - r * 0.008)
+          ..strokeCap = StrokeCap.round,
       );
       canvas.drawPath(
         path,
@@ -495,13 +503,12 @@ class SoulPlayer extends PositionComponent
             Offset(cx - drawD * 0.15, cy - drawD * 0.10),
             Offset(cx + drawD * 0.25, cy + drawD * 1.15),
             [
-              const Color(0xFFFFF6C4).withValues(alpha: 0.72 * plumeBell),
-              const Color(0xFFFFA834).withValues(alpha: 0.54 * plumeBell),
+              const Color(0xFFFFF6C4).withValues(alpha: 0.68 * plumeBell),
+              const Color(0xFFFFA834).withValues(alpha: 0.44 * plumeBell),
               const Color(0x00FF7A18),
             ],
             const [0.0, 0.55, 1.0],
-          )
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9.0),
+          ),
       );
     }
 
@@ -545,19 +552,29 @@ class SoulPlayer extends PositionComponent
           : (game.soulJumpSprite ?? game.soulSprite);
     }
 
-    // 180° Spin Golden Sun-Ray Whip Burst (`0.16..0.36`, `06-23-08.png`)!
+    // 180° Spin Golden Sun-Ray Whip Burst (`0.16..0.36`, blur-free radial!)
     if (u >= 0.15 && u <= 0.38) {
       final whip = math.sin(((u - 0.15) / 0.23).clamp(0.0, 1.0) * math.pi);
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(cx, cy),
-          width: drawD * 1.18,
-          height: drawD * 0.78,
-        ),
+      canvas.save();
+      canvas.translate(cx, cy);
+      canvas.scale(1.18, 0.78);
+      final burstR = drawD * 0.58;
+      canvas.drawCircle(
+        Offset.zero,
+        burstR,
         Paint()
-          ..color = const Color(0xFFFFD66E).withValues(alpha: 0.56 * whip)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10.0),
+          ..shader = Gradient.radial(
+            Offset.zero,
+            burstR,
+            [
+              const Color(0xFFFFF2B8).withValues(alpha: 0.58 * whip),
+              const Color(0xFFFFC654).withValues(alpha: 0.26 * whip),
+              const Color(0x00FFAA30),
+            ],
+            const [0.0, 0.55, 1.0],
+          ),
       );
+      canvas.restore();
     }
 
     if (poseImg != null) {
@@ -619,13 +636,13 @@ class SoulPlayer extends PositionComponent
         ? math.sin((_landingTimer / 0.15).clamp(0.0, 1.0) * math.pi) * dh * 0.038
         : 0.0;
 
-    final footAnchorShift = dh * 0.450;
+    final footAnchorShift = dh * 0.468;
     final supportFloorY = h / 2 - supportLiftPx;
     final centerX = w / 2;
     final strideTheta =
         (_runFrameCursor / GameConfig.runFrameCount) * 2.0 * math.pi;
     final strideContactPulse = (!isDedicatedPose && airAboveSupport <= 0.02)
-        ? 0.94 + 0.08 * math.cos(2.0 * (strideTheta - 0.24 * math.pi))
+        ? 0.93 + 0.09 * math.cos(2.0 * (strideTheta + 0.38 * math.pi))
         : 1.0;
     final shadowScale = ((1.0 - airAboveSupport * 0.36) * strideContactPulse)
         .clamp(0.34, 1.06)
@@ -657,7 +674,7 @@ class SoulPlayer extends PositionComponent
         footAnchorShift +
         landingDipPx +
         slideDropPx +
-        (sliding && isDedicatedPose ? dh * 0.05 : 0.0);
+        (sliding && isDedicatedPose ? dh * 0.022 : 0.0);
 
     // 2. Radiant Celestial Golden Sun-Disk (`hasShield`)!
     if (game.powerUps.hasShield) {
@@ -711,8 +728,8 @@ class SoulPlayer extends PositionComponent
 
     // 2.5 Soft Pixar Solar Corona behind Soul's chiseled sun-crown
     //     (adds radiant golden atmosphere while keeping sprite silhouette 100% razor-sharp!)
-    final headGlowCenter = Offset(centerX, bodyCenterY - dh * 0.14);
-    final headGlowRadius = dw * 0.36;
+    final headGlowCenter = Offset(centerX, bodyCenterY - dh * 0.125);
+    final headGlowRadius = dw * 0.42;
     canvas.drawCircle(
       headGlowCenter,
       headGlowRadius,
@@ -721,11 +738,11 @@ class SoulPlayer extends PositionComponent
           headGlowCenter,
           headGlowRadius,
           const [
-            Color(0x46FFF0B4),
-            Color(0x20FFAE3C),
+            Color(0x52FFF2BC),
+            Color(0x26FFB644),
             Color(0x00FF8E24),
           ],
-          const [0.0, 0.58, 1.0],
+          const [0.0, 0.56, 1.0],
         ),
     );
 
@@ -735,10 +752,17 @@ class SoulPlayer extends PositionComponent
     canvas.rotate(_lean * GameConfig.playerLeanAngle);
 
     final landingSquash = _landingTimer > 0
-        ? math.sin((_landingTimer / 0.15).clamp(0.0, 1.0) * math.pi) * 0.058
+        ? math.sin((_landingTimer / 0.15).clamp(0.0, 1.0) * math.pi) * 0.062
         : 0.0;
-    final sx = ((sliding && !isDedicatedPose) ? 1.12 : 1.0) + landingSquash;
-    final sy = ((sliding && !isDedicatedPose) ? 0.72 : 1.0) - landingSquash;
+    final airStretch = (!sliding && airAboveSupport > 0.06)
+        ? ((1.0 - (airAboveSupport - 0.42).abs()) * 0.044)
+            .clamp(0.0, 0.044)
+            .toDouble()
+        : 0.0;
+    final sx =
+        ((sliding && !isDedicatedPose) ? 1.12 : 1.0) + landingSquash - airStretch * 0.55;
+    final sy =
+        ((sliding && !isDedicatedPose) ? 0.72 : 1.0) - landingSquash + airStretch;
     canvas.scale(sx, sy);
 
     canvas.drawImageRect(
@@ -788,7 +812,7 @@ class SoulPlayer extends PositionComponent
     final shimmer = 0.90 + 0.10 * math.sin(_elapsed * 10.5);
     final trailAlpha = (shadowScale * shimmer).clamp(0.28, 1.0).toDouble();
 
-    // A) Diagonal Directional Cast Shadow stretching down-left (`06-22-12.png`)!
+    // A) Diagonal Directional Cast Shadow stretching down-left (blur-free gradient!)
     final diagShadow = Path()
       ..moveTo(centerX - dw * 0.09 * shadowScale, supportFloorY + 2)
       ..lineTo(centerX + dw * 0.08 * shadowScale, supportFloorY + 4)
@@ -802,34 +826,47 @@ class SoulPlayer extends PositionComponent
           Offset(centerX, supportFloorY),
           Offset(centerX - dw * 0.58, supportFloorY + dh * 0.38),
           [
-            const Color(0x8C180E30).withValues(alpha: 0.56 * shadowScale),
-            const Color(0x44180E30).withValues(alpha: 0.28 * shadowScale),
+            const Color(0x8C180E30).withValues(alpha: 0.50 * shadowScale),
+            const Color(0x44180E30).withValues(alpha: 0.22 * shadowScale),
             const Color(0x00180E30),
           ],
-          const [0.0, 0.60, 1.0],
-        )
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0),
+          const [0.0, 0.58, 1.0],
+        ),
     );
 
-    // B) Warm radial golden pool right beneath Soul's feet
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(centerX, supportFloorY + 4),
-        width: dw * 0.62 * shadowScale,
-        height: dh * 0.16 * shadowScale,
-      ),
-      Paint()
-        ..color = const Color(0xFFFFB844).withValues(alpha: 0.38 * trailAlpha)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0),
-    );
+    // B) Warm radial golden pool right beneath Soul's feet (blur-free radial!)
+    final poolW = dw * 0.72 * shadowScale;
+    final poolH = dh * 0.19 * shadowScale;
+    if (poolW > 1.0 && poolH > 1.0) {
+      canvas.save();
+      canvas.translate(centerX, supportFloorY + 4);
+      canvas.scale(1.0, poolH / poolW);
+      final rad = poolW * 0.5;
+      canvas.drawCircle(
+        Offset.zero,
+        rad,
+        Paint()
+          ..shader = Gradient.radial(
+            Offset.zero,
+            rad,
+            [
+              const Color(0xFFFFC85C).withValues(alpha: 0.44 * trailAlpha),
+              const Color(0xFFFFA838).withValues(alpha: 0.18 * trailAlpha),
+              const Color(0x00FF9828),
+            ],
+            const [0.0, 0.56, 1.0],
+          ),
+      );
+      canvas.restore();
+    }
 
-    // C) Long Blazing Golden Reflection Streak (`06-22-12`, `06-23-20`, `06-22-29`)!
+    // C) Long Blazing Golden Reflection Streak (blur-free linear gradient!)
     final tailSkewX = isDiagonalGlideJet ? -dw * 0.30 : 0.0;
     final streakOuter = Path()
-      ..moveTo(centerX - dw * 0.11 * shadowScale, supportFloorY + 2)
-      ..lineTo(centerX + dw * 0.11 * shadowScale, supportFloorY + 2)
-      ..lineTo(centerX + tailSkewX + dw * 0.06, supportFloorY + trailLen)
-      ..lineTo(centerX + tailSkewX - dw * 0.06, supportFloorY + trailLen)
+      ..moveTo(centerX - dw * 0.12 * shadowScale, supportFloorY + 2)
+      ..lineTo(centerX + dw * 0.12 * shadowScale, supportFloorY + 2)
+      ..lineTo(centerX + tailSkewX + dw * 0.065, supportFloorY + trailLen)
+      ..lineTo(centerX + tailSkewX - dw * 0.065, supportFloorY + trailLen)
       ..close();
     canvas.drawPath(
       streakOuter,
@@ -838,13 +875,12 @@ class SoulPlayer extends PositionComponent
           Offset(centerX, supportFloorY),
           Offset(centerX + tailSkewX, supportFloorY + trailLen),
           [
-            const Color(0xFFFFC04C).withValues(alpha: 0.62 * trailAlpha),
-            const Color(0xFFFF922C).withValues(alpha: 0.28 * trailAlpha),
+            const Color(0xFFFFC04C).withValues(alpha: 0.54 * trailAlpha),
+            const Color(0xFFFF922C).withValues(alpha: 0.22 * trailAlpha),
             const Color(0x00FF801E),
           ],
           const [0.0, 0.58, 1.0],
-        )
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0),
+        ),
     );
 
     final streakCore = Path()
@@ -862,13 +898,12 @@ class SoulPlayer extends PositionComponent
           Offset(centerX, supportFloorY),
           Offset(centerX + tailSkewX * 0.88, supportFloorY + trailLen * 0.90),
           [
-            const Color(0xFFFFF8D0).withValues(alpha: 0.86 * trailAlpha),
-            const Color(0xFFFFCA58).withValues(alpha: 0.40 * trailAlpha),
+            const Color(0xFFFFF8D0).withValues(alpha: 0.80 * trailAlpha),
+            const Color(0xFFFFCA58).withValues(alpha: 0.36 * trailAlpha),
             const Color(0x00FFB438),
           ],
           const [0.0, 0.52, 1.0],
-        )
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.8),
+        ),
     );
 
     // D) Trailing golden sparks skimming across the flagstones (`06-23-20`)!
@@ -913,10 +948,17 @@ class SoulPlayer extends PositionComponent
         p0,
         p1,
         Paint()
-          ..color = const Color(0xFFFFB23A).withValues(alpha: 0.46 * alpha)
-          ..strokeWidth = strokeOuter
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5.0),
+          ..color = const Color(0xFFFFA832).withValues(alpha: 0.20 * alpha)
+          ..strokeWidth = strokeOuter * 1.45
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawLine(
+        p0,
+        p1,
+        Paint()
+          ..color = const Color(0xFFFFBC42).withValues(alpha: 0.40 * alpha)
+          ..strokeWidth = strokeOuter * 0.85
+          ..strokeCap = StrokeCap.round,
       );
       canvas.drawLine(
         p0,

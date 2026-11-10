@@ -68,7 +68,17 @@ void main() {
     game.enterCrystalPortal(GameWorld.moonveilMarsh);
     await tester.pump(const Duration(milliseconds: 16));
     expect(game.currentWorld, equals(GameWorld.moonveilMarsh));
+    expect(game.isPortalWarping, isTrue);
+    expect(game.activeRoadMaxDepth, lessThan(1.0));
     expect(game.showPortalArrivalBanner, isTrue);
+    expect(find.text('MOONVEIL MARSH'), findsOneWidget);
+
+    // After the dimensional breach completes, the new world's road reaches 1.0!
+    for (var i = 0; i < 95; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(game.isPortalWarping, isFalse);
+    expect(game.activeRoadMaxDepth, equals(1.0));
 
     // Returning to Main Menu restores Living Sky-Hover & starting world
     game.returnToTitleHover();
