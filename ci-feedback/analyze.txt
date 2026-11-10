@@ -11,5 +11,7 @@ Got dependencies!
 Try `flutter pub outdated` for more information.
 Analyzing first-game...                                         
 
-warning • The operand can't be 'null', so the condition is always 'true'. Remove the condition • lib/game/components/track_scene.dart:1267:26 • unnecessary_null_comparison
+  error • Undefined class 'Offset'. Try changing the name to the name of an existing class, or creating a class with the name 'Offset' • lib/game/soul_dusk_run_game.dart:204:3 • undefined_class
+  error • Undefined name 'Offset'. Try correcting the name to one that is defined, or defining the name • lib/game/soul_dusk_run_game.dart:206:14 • undefined_identifier
+  error • The method 'Offset' isn't defined for the type 'SoulDuskRunGame'. Try correcting the name to the name of an existing method, or defining a method named 'Offset' • lib/game/soul_dusk_run_game.dart:212:12 • undefined_method
 
