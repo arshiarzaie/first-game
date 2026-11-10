@@ -201,15 +201,15 @@ class SoulDuskRunGame extends FlameGame {
 
   /// Damped screen-space camera impact shake (in logical pixels) for portal
   /// breaches, cloud-bounces, touchdowns, and stumbles!
-  Offset get cameraShakeOffset {
+  ui.Offset get cameraShakeOffset {
     if (_cameraShakeTimer <= 0 || _cameraShakeIntensity <= 0) {
-      return Offset.zero;
+      return ui.Offset.zero;
     }
     final decay = (_cameraShakeTimer / 0.45).clamp(0.0, 1.0).toDouble();
     final amp = _cameraShakeIntensity * decay * decay;
     final dx = math.sin(_ambientSeconds * 67.0) * amp;
     final dy = math.cos(_ambientSeconds * 53.0) * amp * 0.75;
-    return Offset(dx, dy);
+    return ui.Offset(dx, dy);
   }
 
   void triggerCameraShake(double intensity, {double duration = 0.36}) {
