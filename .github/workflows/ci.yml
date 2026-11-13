@@ -55,13 +55,32 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+      # ubuntu-latest ships an Android SDK; no third-party setup action needed
+      # (android-actions/setup-android turned out to be flaky here). Locate
+      # sdkmanager explicitly and point Gradle at it via local.properties.
       - name: Install Android platform and build-tools
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+          set -eo pipefail
+          : "${ANDROID_HOME:=${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKMGR=""
+          for c in "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+                   "$ANDROID_HOME/cmdline-tools/bin/sdkmanager" \
+                   "$ANDROID_HOME/tools/bin/sdkmanager" \
+                   "$(command -v sdkmanager || true)"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then SDKMGR="$c"; break; fi
+          done
+          if [ -z "$SDKMGR" ]; then
+            echo "::error::sdkmanager not found"
+            ls -la "$ANDROID_HOME" 2>/dev/null || true
+            exit 1
+          fi
+          echo "sdkmanager: $SDKMGR"
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" --install "platforms;android-36" "build-tools;36.0.0"
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          echo "--- installed ---"
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools" 2>/dev/null || true
 
       - name: Verify toolchain
         run: |
