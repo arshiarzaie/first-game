@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#120b24" />
+    <title>SOUL: DUSK RUN — 3D</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div id="game-root">
+      <canvas id="webgl-canvas"></canvas>
+
+      <!-- Dimensional Portal Arrival Banner -->
+      <div id="portal-banner" class="portal-banner hidden">
+        <div class="portal-sub">REALM ENTERED</div>
+        <div id="portal-world-name" class="portal-title">MOONVEIL MARSH</div>
+      </div>
+
+      <!-- Screen Flash for Portal Breach / Shield Shatter -->
+      <div id="screen-flash" class="screen-flash"></div>
+
+      <!-- Loading Screen -->
+      <div id="loading-overlay" class="overlay-screen active">
+        <div class="loading-card">
+          <div class="brand-kicker">REAL-TIME 3D ENGINE • BLENDER 5 GLB</div>
+          <h1 class="game-logo">SOUL<span>DUSK RUN</span></h1>
+          <div class="loading-bar-track">
+            <div id="loading-bar-fill" class="loading-bar-fill"></div>
+          </div>
+          <div id="loading-status" class="loading-status">Awakening 3D Realm…</div>
+        </div>
+      </div>
+
+      <!-- Living 3D Main Title Screen (3D Soul hovers & blinks live behind this UI!) -->
+      <div id="title-overlay" class="overlay-screen">
+        <div class="top-bar">
+          <div class="pill-stat">
+            <span class="sun-dot"></span>
+            <span id="title-suns">0</span>
+          </div>
+          <div class="top-actions">
+            <button id="btn-worlds" class="icon-pill" title="Realms">
+              <span>REALMS</span>
+            </button>
+            <button id="btn-sound" class="icon-btn" aria-label="Toggle sound">🔊</button>
+            <button id="btn-settings" class="icon-btn" aria-label="Settings">⚙</button>
+          </div>
+        </div>
+
+        <div class="title-header">
+          <div class="realm-chip" id="title-realm-chip">DUSK HOLLOW</div>
+          <h1 class="game-logo">SOUL<span>DUSK RUN</span></h1>
+          <p class="tap-soul-hint">Tap 3D Soul or PLAY to Dive In</p>
+        </div>
+
+        <!-- Center tap zone lets clicks reach hovering 3D Soul! -->
+        <div id="soul-tap-zone" class="soul-tap-zone" aria-label="Tap Soul to Start"></div>
+
+        <div class="title-footer">
+          <div class="best-badge">BEST <strong id="title-best">0</strong></div>
+          <button id="btn-play" class="cta-btn">PLAY</button>
+        </div>
+      </div>
+
+      <!-- Live In-Run HUD -->
+      <div id="hud-overlay" class="hud-overlay hidden">
+        <div class="hud-top">
+          <div class="hud-score-box">
+            <div class="hud-label">SCORE <span id="hud-mult" class="mult-tag">x1</span></div>
+            <div id="hud-score" class="hud-score">0</div>
+          </div>
+          <div class="hud-right">
+            <div class="pill-stat">
+              <span class="sun-dot"></span>
+              <span id="hud-suns">0</span>
+            </div>
+            <button id="btn-pause" class="icon-btn" aria-label="Pause">❚❚</button>
+          </div>
+        </div>
+
+        <div id="hud-powerups" class="hud-powerups"></div>
+        <div id="hud-hint" class="hud-hint">Swipe Left / Right / Up / Down • Double-Tap for Solar Shield</div>
+      </div>
+
+      <!-- World Select Modal -->
+      <div id="worlds-modal" class="modal-backdrop hidden">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h2>SELECT REALM</h2>
+            <button id="btn-close-worlds" class="icon-btn">✕</button>
+          </div>
+          <div id="worlds-list" class="worlds-list"></div>
+        </div>
+      </div>
+
+      <!-- Settings Modal -->
+      <div id="settings-modal" class="modal-backdrop hidden">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h2>SETTINGS</h2>
+            <button id="btn-close-settings" class="icon-btn">✕</button>
+          </div>
+          <div class="settings-rows">
+            <div class="setting-row">
+              <div>
+                <div class="setting-title">3D GRAPHICS QUALITY</div>
+                <div class="setting-sub">Bloom, shadows & pixel resolution</div>
+              </div>
+              <button id="btn-quality" class="small-pill-btn">HIGH</button>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="setting-title">ENGINE</div>
+                <div class="setting-sub">Blender 5.0 GLB + Three.js WebGL2</div>
+              </div>
+              <span class="setting-val">REAL 3D</span>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="setting-title">VERSION</div>
+                <div class="setting-sub">Skeletal 3D Release</div>
+              </div>
+              <span class="setting-val">1.0.0+24</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pause Modal -->
+      <div id="pause-modal" class="modal-backdrop hidden">
+        <div class="modal-card compact">
+          <h2>PAUSED</h2>
+          <div class="modal-actions">
+            <button id="btn-resume" class="cta-btn">RESUME</button>
+            <button id="btn-pause-home" class="secondary-btn">MAIN MENU</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game Over Modal -->
+      <div id="gameover-modal" class="modal-backdrop hidden">
+        <div class="modal-card compact">
+          <div class="brand-kicker">RUN COMPLETE</div>
+          <h2 class="gameover-title">LIGHT FADED</h2>
+          <div class="gameover-stats">
+            <div class="stat-tile">
+              <span>SCORE</span>
+              <strong id="go-score">0</strong>
+            </div>
+            <div class="stat-tile">
+              <span>BEST</span>
+              <strong id="go-best">0</strong>
+            </div>
+            <div class="stat-tile">
+              <span>SUNS</span>
+              <strong id="go-suns">+0</strong>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button id="btn-retry" class="cta-btn">PLAY AGAIN</button>
+            <button id="btn-go-home" class="secondary-btn">MAIN MENU</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

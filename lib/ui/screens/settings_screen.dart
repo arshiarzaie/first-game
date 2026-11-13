@@ -70,7 +70,7 @@ class SettingsScreen extends StatelessWidget {
               const _SettingRow(
                 icon: Icons.info_outline_rounded,
                 title: 'VERSION',
-                trailing: Text('0.23.0',
+                trailing: Text('1.0.0',
                     style: TextStyle(
                         color: Colors.white70, letterSpacing: 2, fontSize: 14)),
                 caption: 'Early access build',

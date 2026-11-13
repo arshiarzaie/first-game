@@ -28,11 +28,17 @@ android {
         versionName = flutter.versionName
     }
 
+    androidResources {
+        noCompress += listOf("glb", "gltf", "bin")
+    }
+
     buildTypes {
         release {
             // Release signing is intentionally out of scope. Signing with the
             // debug key so `flutter run --release` still works locally.
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

@@ -39,6 +39,17 @@ jobs:
       - name: Verify toolchain
         run: flutter --version
 
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web3d/package-lock.json
+
+      - name: Install 3D engine dependencies
+        run: npm ci
+        working-directory: web3d
+
       - name: Resolve dependencies
         run: flutter pub get
 
@@ -74,27 +85,39 @@ jobs:
           mkdir -p .ci-out
           flutter test | tee .ci-out/test.txt
 
-      - name: Build debug APK
+      # Rebuilds the WebGL2 engine from source straight into
+      # android/app/src/main/assets/web3d so the APK can never ship a stale
+      # bundle. Same command run locally (npm ci && npm run build in web3d/).
+      - name: Build WebGL2 3D engine bundle
         run: |
           set -o pipefail
           mkdir -p .ci-out
-          flutter build apk --debug 2>&1 | tee .ci-out/build.txt
+          npm run build 2>&1 | tee .ci-out/web3d.txt
+
+      - name: Build release 3D APK
+        run: |
+          set -o pipefail
+          mkdir -p .ci-out
+          flutter build apk --release 2>&1 | tee .ci-out/build.txt
 
       # upload-artifact v4 skips files matched by .gitignore, and Flutter's
       # template ignores /build — so stage the APK to an unignored name first.
-      - name: Stage debug APK for upload
+      - name: Stage release APK for upload
         run: |
-          APK_PATH="$(find build/app/outputs -name '*.apk' | head -n 1)"
+          APK_PATH="$(find build/app/outputs -name '*-release.apk' | head -n 1)"
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH="$(find build/app/outputs -name '*.apk' | head -n 1)"
+          fi
           test -n "$APK_PATH" && echo "found: $APK_PATH"
-          cp "$APK_PATH" soul-dusk-run-debug.apk
+          cp "$APK_PATH" soul-dusk-run-3d.apk
 
       # Uploaded only when every preceding step passed (job stops on failure).
-      - name: Upload debug APK + resolved lockfile
+      - name: Upload release APK + resolved lockfile
         uses: actions/upload-artifact@v4
         with:
-          name: soul-dusk-run-debug-apk
+          name: soul-dusk-run-3d-apk
           path: |
-            soul-dusk-run-debug.apk
+            soul-dusk-run-3d.apk
             pubspec.lock
           if-no-files-found: error
           retention-days: 14
@@ -107,12 +130,12 @@ jobs:
           VER="$(grep '^version:' pubspec.yaml | awk '{print $2}' | tr '+' '-')"
           TAG="apk-v${VER}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" soul-dusk-run-debug.apk --clobber
+            gh release upload "$TAG" soul-dusk-run-3d.apk --clobber
           else
-            gh release create "$TAG" soul-dusk-run-debug.apk \
+            gh release create "$TAG" soul-dusk-run-3d.apk \
               --target "$GITHUB_SHA" \
-              --title "SOUL: DUSK RUN v${VER} (Debug APK)" \
-              --notes "Direct one-tap Android debug APK build (${GITHUB_SHA})." \
+              --title "SOUL: DUSK RUN 3D v${VER} (Release APK)" \
+              --notes "Real-Time 3D Engine (Blender 5.0 GLB + WebGL2) Android Release APK (${GITHUB_SHA})." \
               --prerelease
           fi
 

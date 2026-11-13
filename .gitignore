@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Web3D local npm packages
+web3d/node_modules/
+
