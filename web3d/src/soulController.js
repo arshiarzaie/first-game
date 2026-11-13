@@ -12,7 +12,7 @@ export class SoulController {
     this.root.add(this.modelPivot);
 
     this.model = soulGltf.scene;
-    this.model.scale.setScalar(1.18);
+    this.model.scale.setScalar(1.0);
     this.model.traverse((node) => {
       if (node.isMesh) {
         node.castShadow = true;
@@ -25,8 +25,8 @@ export class SoulController {
     this.modelPivot.add(this.model);
 
     // Warm golden point light attached to Soul so his radiant body illuminates nearby stone & crystals in 3D!
-    this.auraLight = new THREE.PointLight(0xffb84d, 1.35, 7.5, 1.6);
-    this.auraLight.position.set(0, 0.95, 0);
+    this.auraLight = new THREE.PointLight(0xffb84d, 1.55, 8.4, 1.6);
+    this.auraLight.position.set(0, 1.05, 0);
     this.root.add(this.auraLight);
 
     // 3D Solar Shield Surf-Disk (visible when Solar Shield active!)
@@ -424,6 +424,6 @@ export class SoulController {
 
   /** Effective collider height for obstacle clearance checks */
   get colliderHeight() {
-    return this.isSliding ? 0.85 : 1.52;
+    return this.isSliding ? 0.78 : 1.47;
   }
 }
