@@ -40,7 +40,12 @@ class SoulDuskRun3DApp {
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: true,
+      // `antialias` is deliberately false. Every draw lands in EffectComposer's
+      // offscreen targets, so the renderer's own MSAA framebuffer would be
+      // allocated and never read. Real MSAA is configured on the composer's
+      // multisampled render target in _buildComposer().
+      antialias: false,
+      stencil: false,
       powerPreference: 'high-performance',
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -52,18 +57,7 @@ class SoulDuskRun3DApp {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.25, 320);
 
-    this.composer = new EffectComposer(this.renderer);
-    this.renderPass = new RenderPass(this.scene, this.camera);
-    this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.38,
-      0.62,
-      0.78
-    );
-    this.outputPass = new OutputPass();
-    this.composer.addPass(this.renderPass);
-    this.composer.addPass(this.bloomPass);
-    this.composer.addPass(this.outputPass);
+    this._buildComposer(4);
 
     this.audio = new Audio3D();
     this.audio.setEnabled(this.save.sound !== false);
@@ -88,12 +82,53 @@ class SoulDuskRun3DApp {
     this._loadAssetsAndBoot();
   }
 
+  /**
+   * (Re)build the post-processing chain.
+   *
+   * `samples > 0` gives genuine hardware MSAA: three renders the scene into a
+   * multisampled target and resolves it on read, which is the only way to get
+   * AA once EffectComposer owns the framebuffer. HalfFloat keeps the scene
+   * linear/HDR so UnrealBloomPass and ACES tone mapping work with real
+   * highlight headroom instead of clipped 8-bit values.
+   */
+  _buildComposer(samples) {
+    // Free the previous chain's GPU targets before allocating new ones --
+    // quality toggles rebuild this and would otherwise leak both targets.
+    if (this.composer) this.composer.dispose();
+    this._msaaSamples = samples;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const rt = new THREE.WebGLRenderTarget(w, h, {
+      samples,
+      type: THREE.HalfFloatType,
+    });
+    rt.texture.name = 'SoulComposer.rt1';
+    this.composer = new EffectComposer(this.renderer, rt);
+    this.renderPass = new RenderPass(this.scene, this.camera);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 0.38, 0.62, 0.78);
+    this.outputPass = new OutputPass();
+    this.composer.addPass(this.renderPass);
+    this.composer.addPass(this.bloomPass);
+    this.composer.addPass(this.outputPass);
+    // The composer tracks its OWN pixel ratio; it must follow the renderer or
+    // the whole scene renders at CSS resolution and is upscaled to the panel.
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(w, h);
+  }
+
   applyQuality(q) {
     this.save.quality = q;
     writeSave(this.save);
     const maxDpr = q === 'high' ? 2.0 : 1.25;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+    this.renderer.setPixelRatio(dpr);
     this.renderer.shadowMap.enabled = q === 'high';
+    const samples = q === 'high' ? 4 : 0;
+    if (this._msaaSamples !== samples) {
+      this._buildComposer(samples); // re-syncs composer DPR and size
+    } else {
+      this.composer.setPixelRatio(dpr);
+    }
     this.bloomPass.enabled = q === 'high';
     const btn = document.getElementById('btn-quality');
     if (btn) btn.textContent = q.toUpperCase();
@@ -107,6 +142,12 @@ class SoulDuskRun3DApp {
     this.baseFov = w / h < 0.62 ? 62 : 56;
     this.camera.fov = this.baseFov;
     this.camera.updateProjectionMatrix();
+    // devicePixelRatio can change (zoom, display change) -- keep both the
+    // renderer and the composer on the same ratio.
+    const maxDpr = (this.save.quality || 'high') === 'high' ? 2.0 : 1.25;
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+    this.renderer.setPixelRatio(dpr);
+    this.composer.setPixelRatio(dpr);
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
   }

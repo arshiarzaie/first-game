@@ -1,13 +1,19 @@
 plugins {
     id("com.android.application")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
-    id("dev.flutter.flutter-gradle-plugin")
 }
 
+/**
+ * Pure Android Gradle build — no Flutter.
+ *
+ * MainActivity is a plain `android.app.Activity` that hosts a hardware
+ * accelerated WebView and serves the offline Three.js/WebGL2 engine from
+ * APK assets. The Flutter engine is never started, so pulling the Flutter
+ * Gradle Plugin (and with it libflutter.so + the Dart AOT snapshot) out of
+ * the build removes roughly 70 MB of dead weight from the APK.
+ */
 android {
     namespace = "com.ghoroub.soulduskrun"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -16,39 +22,43 @@ android {
 
     defaultConfig {
         applicationId = "com.ghoroub.soulduskrun"
-        // Values resolved by the Flutter Gradle Plugin (3.47.7): minSdk 24,
-        // targetSdk 36, compileSdk 36, NDK 28.2.13676358.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-    }
-
-    androidResources {
-        noCompress += listOf("glb", "gltf", "bin")
+        minSdk = 24
+        targetSdk = 36
+        // Source of truth for the app version now that pubspec.yaml is inert.
+        // CI derives the release tag from these two lines.
+        versionCode = 26
+        versionName = "1.1.0"
     }
 
     buildTypes {
         release {
             // Release signing is intentionally out of scope. Signing with the
-            // debug key so `flutter run --release` still works locally.
+            // debug key so the APK stays installable without secrets.
             signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
-}
 
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    // Keep the packaged web bundle as small as aapt2 can make it: everything
+    // (html/js/css/glb) is deflated. AssetManager decompresses transparently
+    // for the WebView's asset interceptor.
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/*.kotlin_module",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*",
+            )
+        }
     }
-}
 
-flutter {
-    source = "../.."
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
 }

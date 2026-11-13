@@ -1,7 +1,12 @@
 name: CI
 
-# Minimal CI for SOUL: DUSK RUN — analyze -> test -> debug APK -> artifact.
-# The debug APK is unsigned by design; no secrets are used in this file.
+# SOUL: DUSK RUN 3D — build WebGL2 engine -> assemble release APK -> publish.
+# The APK is signed with the debug key by design; no secrets are used here.
+#
+# There is deliberately NO Flutter toolchain in this pipeline. MainActivity is
+# a plain `android.app.Activity` hosting a WebView; the Flutter engine never
+# starts, so building with `flutter build apk` only added ~70 MB of unused
+# libflutter.so + Dart AOT. This is a straight Android Gradle build.
 
 on:
   push:
@@ -11,34 +16,20 @@ on:
   workflow_dispatch:
 
 jobs:
-  analyze-test-build:
-    name: Analyze, test, and build debug APK
+  build-release-apk:
+    name: Build 3D engine and release APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      # Needed only by the pubspec.lock commit step (pushes the resolved
-      # lockfile back to this branch). Everything else is read-only.
       contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Flutter (pinned stable)
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.7'
-          channel: stable
-          cache: true
-
-      - name: Verify toolchain
-        run: flutter --version
-
+      # ---------------------------------------------------------- web engine
+      # Runs first: Vite writes straight into
+      # android/app/src/main/assets/web3d, so the APK can never ship a stale
+      # bundle.
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -50,44 +41,6 @@ jobs:
         run: npm ci
         working-directory: web3d
 
-      - name: Resolve dependencies
-        run: flutter pub get
-
-      # Keeps the exact CI-resolved dependency set version-controlled for
-      # reproducibility. No-op once the lockfile is committed.
-      # [skip ci] prevents workflow loops.
-      - name: Commit resolved pubspec.lock
-        run: |
-          git config user.name "ci-lockfile-bot"
-          git config user.email "ci-lockfile-bot@users.noreply.github.com"
-          git add pubspec.lock
-          git diff --cached --quiet && echo "pubspec.lock already up to date" \
-            || (git commit -m "chore: commit CI-resolved pubspec.lock (run $GITHUB_RUN_ID) [skip ci]" \
-                && git push)
-        shell: bash
-
-      # NOTE: output is tee'd to a file because on ubuntu-latest this step
-      # intermittently fails when its stdout is attached directly (observed
-      # 3/3 failures without the capture pipe vs 0 failures with it); the file
-      # also feeds the failure-inspection step below.
-      # tee keeps a copy for the failure-inspection step. `set -o pipefail`
-      # is REQUIRED: without it the pipeline would return tee's exit code and
-      # mask analyzer/test/build failures (root cause of earlier false greens).
-      - name: Static analysis
-        run: |
-          set -o pipefail
-          mkdir -p .ci-out
-          flutter analyze | tee .ci-out/analyze.txt
-
-      - name: Unit and widget tests
-        run: |
-          set -o pipefail
-          mkdir -p .ci-out
-          flutter test | tee .ci-out/test.txt
-
-      # Rebuilds the WebGL2 engine from source straight into
-      # android/app/src/main/assets/web3d so the APK can never ship a stale
-      # bundle. Same command run locally (npm ci && npm run build in web3d/).
       - name: Build WebGL2 3D engine bundle
         working-directory: web3d
         run: |
@@ -95,31 +48,48 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/.ci-out"
           npm run build 2>&1 | tee "$GITHUB_WORKSPACE/.ci-out/web3d.txt"
 
-      - name: Build release 3D APK
+      # -------------------------------------------------------------- android
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and build-tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Verify toolchain
+        run: |
+          java -version 2>&1 | head -n 1
+          ./gradlew --version | grep -E "^(Gradle|JVM)" || true
+        working-directory: android
+
+      - name: Assemble release APK
+        working-directory: android
         run: |
           set -o pipefail
-          mkdir -p .ci-out
-          flutter build apk --release 2>&1 | tee .ci-out/build.txt
+          mkdir -p "$GITHUB_WORKSPACE/.ci-out"
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace 2>&1 \
+            | tee "$GITHUB_WORKSPACE/.ci-out/build.txt"
 
-      # upload-artifact v4 skips files matched by .gitignore, and Flutter's
-      # template ignores /build — so stage the APK to an unignored name first.
       - name: Stage release APK for upload
         run: |
-          APK_PATH="$(find build/app/outputs -name '*-release.apk' | head -n 1)"
-          if [ -z "$APK_PATH" ]; then
-            APK_PATH="$(find build/app/outputs -name '*.apk' | head -n 1)"
-          fi
-          test -n "$APK_PATH" && echo "found: $APK_PATH"
+          APK_PATH="$(find android/app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          test -n "$APK_PATH" || { echo "no APK produced"; exit 1; }
+          echo "found: $APK_PATH"
           cp "$APK_PATH" soul-dusk-run-3d.apk
+          ls -l soul-dusk-run-3d.apk | awk '{printf "APK size: %.1f MB\n", $5/1048576}'
 
-      # Uploaded only when every preceding step passed (job stops on failure).
-      - name: Upload release APK + resolved lockfile
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
           name: soul-dusk-run-3d-apk
-          path: |
-            soul-dusk-run-3d.apk
-            pubspec.lock
+          path: soul-dusk-run-3d.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -128,15 +98,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VER="$(grep '^version:' pubspec.yaml | awk '{print $2}' | tr '+' '-')"
-          TAG="apk-v${VER}"
+          VER_NAME="$(grep -m1 'versionName' android/app/build.gradle.kts \
+                      | sed -E 's/.*"(.*)".*/\1/')"
+          VER_CODE="$(grep -m1 'versionCode' android/app/build.gradle.kts \
+                      | grep -oE '[0-9]+')"
+          TAG="apk-v${VER_NAME}-${VER_CODE}"
+          echo "tag: $TAG"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" soul-dusk-run-3d.apk --clobber
           else
             gh release create "$TAG" soul-dusk-run-3d.apk \
               --target "$GITHUB_SHA" \
-              --title "SOUL: DUSK RUN 3D v${VER} (Release APK)" \
-              --notes "Real-Time 3D Engine (Blender 5.0 GLB + WebGL2) Android Release APK (${GITHUB_SHA})." \
+              --title "SOUL: DUSK RUN 3D v${VER_NAME} (${VER_CODE}) — Release APK" \
+              --notes "Real-time 3D engine (Blender 5.0 GLB + Three.js WebGL2) Android release APK (${GITHUB_SHA}). Built with plain Gradle — no Flutter runtime bundled." \
               --prerelease
           fi
 
