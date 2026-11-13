@@ -89,10 +89,11 @@ jobs:
       # android/app/src/main/assets/web3d so the APK can never ship a stale
       # bundle. Same command run locally (npm ci && npm run build in web3d/).
       - name: Build WebGL2 3D engine bundle
+        working-directory: web3d
         run: |
           set -o pipefail
-          mkdir -p .ci-out
-          npm run build 2>&1 | tee .ci-out/web3d.txt
+          mkdir -p "$GITHUB_WORKSPACE/.ci-out"
+          npm run build 2>&1 | tee "$GITHUB_WORKSPACE/.ci-out/web3d.txt"
 
       - name: Build release 3D APK
         run: |

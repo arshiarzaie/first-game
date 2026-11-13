@@ -1,8 +1,8 @@
 Resolving dependencies...
 Downloading packages...
   material_color_utilities 0.13.0 (0.13.1 available)
-  shared_preferences_android 2.4.28 (2.5.5 available)
-  shared_preferences_foundation 2.5.7 (2.6.2 available)
+  shared_preferences_android 2.4.28 (2.5.4 available)
+  shared_preferences_foundation 2.5.7 (2.6.1 available)
   test_api 0.7.12 (0.7.15 available)
   vector_math 2.4.3 (2.4.4 available)
   web 1.1.1 (1.1.2 available)
@@ -10,4 +10,8 @@ Got dependencies!
 6 packages have newer versions incompatible with dependency constraints.
 Try `flutter pub outdated` for more information.
 Analyzing first-game...                                         
-No issues found! (ran in 8.6s)
+
+  error • Undefined class 'Offset'. Try changing the name to the name of an existing class, or creating a class with the name 'Offset' • lib/game/soul_dusk_run_game.dart:204:3 • undefined_class
+  error • Undefined name 'Offset'. Try correcting the name to one that is defined, or defining the name • lib/game/soul_dusk_run_game.dart:206:14 • undefined_identifier
+  error • The method 'Offset' isn't defined for the type 'SoulDuskRunGame'. Try correcting the name to the name of an existing method, or defining a method named 'Offset' • lib/game/soul_dusk_run_game.dart:212:12 • undefined_method
+
