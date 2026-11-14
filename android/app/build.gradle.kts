@@ -26,8 +26,8 @@ android {
         targetSdk = 36
         // Source of truth for the app version now that pubspec.yaml is inert.
         // CI derives the release tag from these two lines.
-        versionCode = 26
-        versionName = "1.1.0"
+        versionCode = 27
+        versionName = "1.2.0"
     }
 
     buildTypes {

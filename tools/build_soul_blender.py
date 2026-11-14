@@ -13,6 +13,26 @@ from mathutils import Vector, Euler, Matrix
 import numpy as np
 from PIL import Image, ImageDraw
 
+# ---------------------------------------------------------------------------
+# Silhouette tunables.
+#
+# The owner's acceptance criterion is "make it exactly like the reference
+# sheet". The reference is a PNG with no metres in it, so the only legitimate
+# comparison is between SCALE-INVARIANT ratios (width / figure-height, per row
+# of the silhouette). `tools/measure_silhouette.py` scores our rendered
+# turnagainst those ratios; `tools/tune_silhouette.py` sweeps the knobs below
+# to minimise the error. Values live here so they can be overridden from the
+# environment during a sweep without editing this file.
+# ---------------------------------------------------------------------------
+import json as _json
+
+TUNING = _json.loads(os.environ.get("SOUL_TUNING", "{}"))
+
+
+def T(name, default):
+    """Tunable with a default. Overridden by SOUL_TUNING={"name": value}."""
+    return TUNING.get(name, default)
+
 
 def reset_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -77,15 +97,25 @@ def srgb_triple(rgb):
     return tuple(srgb_to_linear(c) for c in rgb)
 
 
+def linear_to_srgb(c):
+    """Inverse of `srgb_to_linear` -- for turning shaded linear light into the
+    8-bit sRGB bytes a PNG (or a screen) actually displays."""
+    c = max(0.0, min(1.0, c))
+    return c * 12.92 if c <= 0.0031308 else 1.055 * (c ** (1 / 2.4)) - 0.055
+
+
 def ember_gradient(co, no, head_c):
     """
     Molten-sun ramp measured off the reference sheet:
         deep rust #6b2d18 -> ember #e65412 -> gold #ff9e2c -> cream #ffedb4
     """
-    RUST = (0.36, 0.09, 0.03)
-    EMBER = (0.94, 0.38, 0.04)
-    GOLD = (0.99, 0.63, 0.10)
-    CREAM = (1.00, 0.92, 0.40)
+    # Fitted by `tools/tune_colour.py` against the mean sRGB of the reference's
+    # character pixels (180.5, 106.2, 45.0). We now land on (179.3, 106.0, 44.4)
+    # with the channel ratios matching too (G/R .591 vs .588, B/R .247 vs .249).
+    RUST = (T("rust_r", 0.42), T("rust_g", 0.09), T("rust_b", 0.06))
+    EMBER = (T("ember_r", 0.94), T("ember_g", 0.54), T("ember_b", 0.14))
+    GOLD = (T("gold_r", 1.00), T("gold_g", 0.77), T("gold_b", 0.26))
+    CREAM = (T("cream_r", 1.00), T("cream_g", 0.92), T("cream_b", 0.40))
 
     tvert = max(0.0, min(1.0, (co.z - 0.02) / 1.30))
 
@@ -154,53 +184,76 @@ def build_seamless_chibi_body(mat_body):
 
     # 1. Compact pear-shaped tummy that flares straight into the shoulders.
     el_pel = mb_data.elements.new(type="ELLIPSOID")
-    el_pel.co = (0.0, 0.010, 0.270)
-    el_pel.size_x, el_pel.size_y, el_pel.size_z = 0.420, 0.385, 0.295
+    el_pel.co = (0.0, 0.010, T("pelvis_cz", 0.270))
+    el_pel.size_x = T("pelvis_rx", 0.52)
+    el_pel.size_y = T("pelvis_ry", 0.385)
+    el_pel.size_z = T("pelvis_rz", 0.295)
     el_pel.radius = 1.0
 
     el_tum = mb_data.elements.new(type="ELLIPSOID")
-    el_tum.co = (0.0, -0.014, 0.345)
-    el_tum.size_x, el_tum.size_y, el_tum.size_z = 0.410, 0.375, 0.285
+    el_tum.co = (0.0, -0.014, T("tummy_cz", 0.345))
+    el_tum.size_x = T("tummy_rx", 0.51)
+    el_tum.size_y = T("tummy_ry", 0.375)
+    el_tum.size_z = T("tummy_rz", 0.285)
     el_tum.radius = 1.0
 
     el_che = mb_data.elements.new(type="ELLIPSOID")
-    el_che.co = (0.0, 0.000, 0.495)
-    el_che.size_x, el_che.size_y, el_che.size_z = 0.370, 0.340, 0.265
+    el_che.co = (0.0, 0.000, T("chest_cz", 0.53))
+    el_che.size_x = T("chest_rx", 0.52)
+    el_che.size_y = T("chest_ry", 0.44)
+    el_che.size_z = T("chest_rz", 0.265)
     el_che.radius = 1.0
 
-    # Shoulder yoke rising into the head base: no neck gap, exactly like the sheet.
-    add_meta_capsule(mb_data, 0.0, 0.0, 0.500, 0.0, 0.006, 0.700, 0.106, 0.098, steps=5)
+    # Shoulder yoke rising into the head base: no neck gap, exactly like the
+    # sheet. Measured off the sheet the shoulder mass has to stay wide well
+    # above the armpits, otherwise the silhouette pinches into a neck.
+    add_meta_capsule(mb_data, 0.0, 0.0, T("yoke_z0", 0.500), 0.0, 0.006, T("yoke_z1", 0.700),
+                     T("yoke_r0", 0.21), T("yoke_r1", 0.2), steps=5)
 
-    # 2. THE GIANT MOLTEN SUN HEAD (53.6 % of the figure, wider than it is tall!)
+    # 2. THE GIANT MOLTEN SUN HEAD (wider than it is tall, and -- measured off
+    #    the sheet -- noticeably FLATTER front-to-back than it is wide).
     el_head = mb_data.elements.new(type="ELLIPSOID")
-    el_head.co = (0.0, 0.012, 1.030)
-    el_head.size_x, el_head.size_y, el_head.size_z = 0.740, 0.800, 0.600
+    el_head.co = (0.0, T("head_cy", 0.012), T("head_cz", 1.06))
+    el_head.size_x = T("head_rx", 0.65)
+    el_head.size_y = T("head_ry", 0.54)
+    el_head.size_z = T("head_rz", 0.64)
     el_head.radius = 1.0
 
     # Chubby cheek lobes low & forward so the big ball still reads as a face.
     for side in (-1.0, 1.0):
         el_chk = mb_data.elements.new(type="ELLIPSOID")
-        el_chk.co = (side * 0.156, -0.140, 0.910)
-        el_chk.size_x, el_chk.size_y, el_chk.size_z = 0.313, 0.294, 0.276
+        el_chk.co = (side * T("cheek_x", 0.156), T("cheek_cy", -0.140), T("cheek_cz", 0.910))
+        el_chk.size_x = T("cheek_rx", 0.313)
+        el_chk.size_y = T("cheek_ry", 0.294)
+        el_chk.size_z = T("cheek_rz", 0.276)
         el_chk.radius = 1.0
 
-    # 3. Stubby little legs & upturned boots (X = +-0.082)
+    # 3. Stubby little legs & upturned boots
     for side in (-1.0, 1.0):
-        hx = side * 0.078
-        add_meta_capsule(mb_data, hx, 0.0, 0.215, hx * 1.05, -0.006, 0.115, 0.068, 0.058, steps=6)
-        add_meta_capsule(mb_data, hx * 1.05, -0.006, 0.115, hx * 1.08, 0.006, 0.040, 0.056, 0.048, steps=6)
-        add_meta_capsule(mb_data, hx * 1.08, 0.020, 0.036, hx * 1.08, -0.078, 0.032, 0.050, 0.044, steps=5)
+        hx = side * T("hip_x", 0.112)
+        add_meta_capsule(mb_data, hx, 0.0, T("thigh_z", 0.215), hx * 1.05, -0.006, 0.115,
+                         T("thigh_r", 0.1), T("knee_r", 0.086), steps=6)
+        add_meta_capsule(mb_data, hx * 1.05, -0.006, 0.115, hx * 1.08, 0.006, 0.040,
+                         T("knee_r", 0.086) * 0.97, T("ankle_r", 0.048), steps=6)
+        add_meta_capsule(mb_data, hx * 1.08, 0.020, 0.036, hx * 1.08, -0.078, 0.032,
+                         T("boot_r", 0.050), 0.044, steps=5)
 
     # 4. Short arms held out in a friendly A-pose, cute mitten paws
     for side in (-1.0, 1.0):
-        add_meta_capsule(mb_data, side * 0.112, 0.0, 0.550, side * 0.205, 0.006, 0.495, 0.058, 0.052, steps=6)
-        add_meta_capsule(mb_data, side * 0.205, 0.006, 0.495, side * 0.280, -0.016, 0.430, 0.050, 0.054, steps=6)
+        add_meta_capsule(mb_data, side * T("shoulder_x", 0.112), 0.0, T("shoulder_z", 0.550),
+                         side * T("elbow_x", 0.205), 0.006, T("elbow_z", 0.495),
+                         T("upperarm_r", 0.058), T("forearm_r", 0.052), steps=6)
+        add_meta_capsule(mb_data, side * T("elbow_x", 0.205), 0.006, T("elbow_z", 0.495),
+                         side * T("wrist_x", 0.280), -0.016, T("wrist_z", 0.53),
+                         T("forearm_r", 0.052), T("forearm_r", 0.052) * 1.08, steps=6)
         el_paw = mb_data.elements.new(type="ELLIPSOID")
-        el_paw.co = (side * 0.312, -0.026, 0.416)
-        el_paw.size_x, el_paw.size_y, el_paw.size_z = 0.140, 0.130, 0.122
+        el_paw.co = (side * T("paw_x", 0.25), -0.026, T("paw_z", 0.416))
+        el_paw.size_x = T("paw_rx", 0.140)
+        el_paw.size_y = T("paw_ry", 0.130)
+        el_paw.size_z = T("paw_rz", 0.122)
         el_paw.radius = 1.0
         el_th = mb_data.elements.new(type="BALL")
-        el_th.co = (side * 0.290, -0.062, 0.432)
+        el_th.co = (side * T("thumb_x", 0.290), -0.062, T("thumb_z", 0.432))
         el_th.radius = 0.040
 
     bpy.context.view_layer.update()
@@ -958,11 +1011,12 @@ def render_evaluated_verification_sheet(arm_obj, mesh_obj, out_png):
                 continue
 
             mname = mat_names[tri.material_index] if tri.material_index < len(mat_names) else "Mat_SoulBody"
-            base_c = mat_palette.get(mname, mat_palette["Mat_SoulBody"])
+            base_srgb = mat_palette.get(mname, mat_palette["Mat_SoulBody"])
+            base_lin = np.array([srgb_to_linear(v / 255.0) for v in base_srgb])
             if col_attr and mname in ("Mat_SoulBody", "Mat_CrownGold"):
                 li = tri.loops[0]
                 vc = col_attr.data[li].color
-                base_c = np.array([vc[0] * 255.0, vc[1] * 255.0, vc[2] * 255.0])
+                base_lin = np.array([vc[0], vc[1], vc[2]])
 
             tnorm = np.array([
                 (nx[vi[0]] + nx[vi[1]] + nx[vi[2]]) / 3.0,
@@ -972,8 +1026,9 @@ def render_evaluated_verification_sheet(arm_obj, mesh_obj, out_png):
             tnorm /= (np.linalg.norm(tnorm) + 1e-6)
             ndotl = float(np.dot(tnorm, light_dir))
             wrap = max(0.32, min(1.12, (ndotl + 0.45) / 1.35))
-            rim = max(0.0, 1.0 - abs(tnorm[1])) ** 2.2 * 36.0
-            lit_c = np.clip(base_c * wrap + rim, 0, 255).astype(np.uint8)
+            rim = max(0.0, 1.0 - abs(tnorm[1])) ** 2.2 * 0.10
+            lit_lin = np.clip(base_lin * wrap + rim, 0.0, 1.0)
+            lit_c = np.array([linear_to_srgb(v) * 255.0 for v in lit_lin], dtype=np.uint8)
 
             ys_g, xs_g = np.mgrid[ymin:ymax + 1, xmin:xmax + 1]
             w0 = ((p1[1] - p2[1]) * (xs_g - p2[0]) + (p2[0] - p1[0]) * (ys_g - p2[1])) / denom
@@ -1079,10 +1134,15 @@ def render_turnaround_sheet(arm_obj, mesh_obj, out_png):
                 continue
 
             mname = mat_names[tri.material_index] if tri.material_index < len(mat_names) else "Mat_SoulBody"
-            base_c = MAT_PALETTE.get(mname, MAT_PALETTE["Mat_SoulBody"])
+            # MAT_PALETTE entries are authored as 0-255 sRGB, so they go through
+            # srgb_to_linear; the vertex-colour attribute already IS linear.
+            # Mixing the two without converting is what made these previews read
+            # as scorched red instead of the reference's warm amber.
+            base_srgb = MAT_PALETTE.get(mname, MAT_PALETTE["Mat_SoulBody"])
+            base_lin = np.array([srgb_to_linear(v / 255.0) for v in base_srgb])
             if col_attr and mname in ("Mat_SoulBody", "Mat_CrownGold"):
                 vc = col_attr.data[tri.loops[0]].color
-                base_c = np.array([vc[0] * 255.0, vc[1] * 255.0, vc[2] * 255.0])
+                base_lin = np.array([vc[0], vc[1], vc[2]])
 
             tnorm = np.array([(nx[vi[0]] + nx[vi[1]] + nx[vi[2]]) / 3.0,
                               (ny[vi[0]] + ny[vi[1]] + ny[vi[2]]) / 3.0,
@@ -1090,8 +1150,9 @@ def render_turnaround_sheet(arm_obj, mesh_obj, out_png):
             tnorm /= (np.linalg.norm(tnorm) + 1e-6)
             ndotl = float(np.dot(tnorm, light_dir))
             wrap = max(0.32, min(1.12, (ndotl + 0.45) / 1.35))
-            rim = max(0.0, 1.0 - abs(tnorm[1])) ** 2.2 * 36.0
-            lit_c = np.clip(base_c * wrap + rim, 0, 255).astype(np.uint8)
+            rim = max(0.0, 1.0 - abs(tnorm[1])) ** 2.2 * 0.10
+            lit_lin = np.clip(base_lin * wrap + rim, 0.0, 1.0)
+            lit_c = np.array([linear_to_srgb(v) * 255.0 for v in lit_lin], dtype=np.uint8)
 
             ys_g, xs_g = np.mgrid[ymin:ymax + 1, xmin:xmax + 1]
             w0 = ((p1[1] - p2[1]) * (xs_g - p2[0]) + (p2[0] - p1[0]) * (ys_g - p2[1])) / denom
@@ -1408,7 +1469,11 @@ def main():
     os.makedirs("web3d/public/models", exist_ok=True)
     out_glb = "web3d/public/models/soul.glb"
 
-    render_evaluated_verification_sheet(arm_obj, mesh_obj, "/tmp/blender_soul_sheet_v4.png")
+    # SOUL_TUNE=1 skips the slow Cycles hero render and the debug sheet so the
+    # turnaround silhouette can be re-measured against the reference in seconds.
+    TUNE = os.environ.get("SOUL_TUNE") == "1"
+    if not TUNE:
+        render_evaluated_verification_sheet(arm_obj, mesh_obj, "/tmp/blender_soul_sheet_v4.png")
     render_turnaround_sheet(arm_obj, mesh_obj, "/tmp/soul_turnaround_v4.png")
 
     bpy.ops.export_scene.gltf(
@@ -1447,7 +1512,8 @@ def main():
 
     # In-game hero render LAST: it fills the scene with scenery that must never
     # end up inside the exported .glb.
-    render_hero_shot(arm_obj, mesh_obj, "/tmp/soul_hero_ingame.png")
+    if not TUNE:
+        render_hero_shot(arm_obj, mesh_obj, "/tmp/soul_hero_ingame.png")
 
 
 if __name__ == "__main__":
