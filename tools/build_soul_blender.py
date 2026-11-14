@@ -34,10 +34,11 @@ def make_pbr_mat(name, base_rgba, roughness=0.42, metallic=0.0, emission_rgb=Non
         vcol.layer_name = "Col"
         links.new(vcol.outputs["Color"], bsdf.inputs["Base Color"])
     else:
-        bsdf.inputs["Base Color"].default_value = base_rgba
+        # base_rgba is authored in sRGB; the socket is linear.
+        bsdf.inputs["Base Color"].default_value = (*srgb_triple(base_rgba[:3]), base_rgba[3])
 
     if emission_rgb and emission_strength > 0.0 and "Emission Color" in bsdf.inputs:
-        bsdf.inputs["Emission Color"].default_value = (*emission_rgb, 1.0)
+        bsdf.inputs["Emission Color"].default_value = (*srgb_triple(emission_rgb), 1.0)
         bsdf.inputs["Emission Strength"].default_value = emission_strength
 
     links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
@@ -60,15 +61,31 @@ def add_meta_capsule(mball, ax, ay, az, bx, by, bz, r_surface_a, r_surface_b, st
 
 
 
+def srgb_to_linear(c):
+    """
+    glTF defines COLOR_0 as LINEAR and Blender node sockets / colour
+    attributes live in the linear working space too, so every colour authored
+    here as an sRGB number has to be converted before it is stored. Skipping
+    this made the Soul render washed out: an intended sRGB (214,142,81) amber
+    was written straight into a linear slot and came back as (248,211,165) milk.
+    """
+    c = max(0.0, min(1.0, c))
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def srgb_triple(rgb):
+    return tuple(srgb_to_linear(c) for c in rgb)
+
+
 def ember_gradient(co, no, head_c):
     """
     Molten-sun ramp measured off the reference sheet:
         deep rust #6b2d18 -> ember #e65412 -> gold #ff9e2c -> cream #ffedb4
     """
-    RUST = (0.40, 0.11, 0.06)
-    EMBER = (0.96, 0.43, 0.11)
-    GOLD = (1.00, 0.71, 0.24)
-    CREAM = (1.00, 0.97, 0.86)
+    RUST = (0.36, 0.09, 0.03)
+    EMBER = (0.94, 0.38, 0.04)
+    GOLD = (0.99, 0.63, 0.10)
+    CREAM = (1.00, 0.92, 0.40)
 
     tvert = max(0.0, min(1.0, (co.z - 0.02) / 1.30))
 
@@ -82,7 +99,7 @@ def ember_gradient(co, no, head_c):
 
     n = fbm3(float(co.x), float(co.y), float(co.z))
 
-    heat = max(0.0, min(1.0, 0.34 * tvert + 0.64 * core + 0.22 * upf + 0.22 * (n - 0.5) + 0.14))
+    heat = max(0.0, min(1.0, 0.34 * tvert + 0.64 * core + 0.22 * upf + 0.22 * (n - 0.5) - 0.06))
 
     def mix(a, b, t):
         return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t)
@@ -210,7 +227,9 @@ def build_seamless_chibi_body(mat_body):
         poly.use_smooth = True
 
     if not body_obj.data.color_attributes:
-        body_obj.data.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+        # FLOAT_COLOR, not BYTE_COLOR: linear values crowd into the low end of
+        # the range and 8-bit storage would band the dark ember tones.
+        body_obj.data.color_attributes.new(name="Col", type="FLOAT_COLOR", domain="CORNER")
     col_layer = body_obj.data.color_attributes["Col"]
     verts = body_obj.data.vertices
     head_c = Vector((0.0, 0.012, 1.000))
@@ -218,7 +237,7 @@ def build_seamless_chibi_body(mat_body):
         for li in poly.loop_indices:
             v = verts[body_obj.data.loops[li].vertex_index]
             r, g, b = ember_gradient(v.co, v.normal, head_c)
-            col_layer.data[li].color = (r, g, b, 1.0)
+            col_layer.data[li].color = (srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b), 1.0)
 
     body_obj.data.materials.append(mat_body)
 
@@ -284,14 +303,19 @@ def make_faceted_sun_ray_mesh(name, length, w0, d0, curve_up=0.03, curve_back=0.
     bm.to_mesh(mesh)
     bm.free()
 
-    mesh.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+    mesh.color_attributes.new(name="Col", type="FLOAT_COLOR", domain="CORNER")
     col = mesh.color_attributes["Col"]
     for poly in mesh.polygons:
         poly.use_smooth = True
         for li in poly.loop_indices:
             vz = mesh.vertices[mesh.loops[li].vertex_index].co.z
             u = max(0.0, min(1.0, vz / max(0.01, length)))
-            col.data[li].color = (1.0, 0.62 + 0.33 * u, 0.16 + 0.44 * (u * u), 1.0)
+            col.data[li].color = (
+                1.0,
+                srgb_to_linear(0.62 + 0.33 * u),
+                srgb_to_linear(0.16 + 0.44 * (u * u)),
+                1.0,
+            )
     return mesh
 
 
@@ -577,7 +601,7 @@ def build_armature_and_skin(body_obj, parts, ray_bone_transforms, eyelid_pivots)
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         if not obj.data.color_attributes:
-            obj.data.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+            obj.data.color_attributes.new(name="Col", type="FLOAT_COLOR", domain="CORNER")
             ca = obj.data.color_attributes["Col"]
             for i in range(len(ca.data)):
                 ca.data[i].color = (1.0, 1.0, 1.0, 1.0)
@@ -1098,11 +1122,9 @@ def render_turnaround_sheet(arm_obj, mesh_obj, out_png):
 
 
 def _hex(h):
-    """'#1d113a' -> linear-ish (r,g,b,1) float tuple."""
+    """'#1d113a' -> linear (r,g,b,1) float tuple."""
     h = h.lstrip("#")
     r, g, b = (int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
-    def srgb_to_linear(c):
-        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
     return (srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b), 1.0)
 
 
